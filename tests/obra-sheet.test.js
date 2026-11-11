@@ -142,3 +142,16 @@ test('override rules never touch the sheet rows', () => {
   assert.ok(rows.length > 0);
   assert.ok(rows.every(t => t.category === 'Obra' && t.kind === 'expense'));
 });
+
+test('the sheet sync leaves round-trip links alone', () => {
+  const finance = setup();
+  finance.reconcileSource({ source: 'obra-sheet', rows: parseRows(sheet, { accounts: ACCOUNTS, category: 'Obra' }) });
+  finance.ingestTransactions([
+    { account_id: 'mercadopago-ars', date: '2026-10-13', amount: 2700000, counterparty: 'Buyer', description: 'Transferencia recibida', external_id: 'in' },
+    { account_id: 'mercadopago-ars', date: '2026-10-13', amount: -2700000, counterparty: 'Buyer', description: 'Transferencia enviada', external_id: 'out' }
+  ], 'bot', { source: 'bot' });
+  assert.equal(finance.linkRoundTrips().pairs, 1);
+  const links = finance.linkPayments({ source: 'obra-sheet', categories: ['Transferencias a personas'] });
+  assert.equal(links.released, 0);
+  assert.equal(finance.listTransactions({}).transactions.find(t => t.external_id === 'out').kind, 'transfer');
+});

@@ -992,9 +992,12 @@ cron.schedule('0 21 * * 1-5', async () => {
   await recordAutoBalances().catch(error => console.error('Auto balance error:', error.message));
 }, { timezone: 'America/Argentina/Buenos_Aires' });
 
-cron.schedule('*/30 * * * *', () => {
-  obraSync.sync('system');
-}, { timezone: 'America/Argentina/Buenos_Aires' });
+// Every 30 minutes: pull the construction sheet, then pair payments that came back.
+async function maintenance() {
+  await obraSync.sync('system');
+  try { finance.linkRoundTrips(); } catch (error) { console.error('Round trips:', error.message); }
+}
+cron.schedule('*/30 * * * *', () => { maintenance(); }, { timezone: 'America/Argentina/Buenos_Aires' });
 
 cron.schedule('30 11,17 * * *', () => {
   refreshFxRate().catch(error => console.error('FX refresh error:', error.message));
@@ -1020,7 +1023,7 @@ if (!process.env.FINANZAS_API_TOKEN) {
 app.listen(PORT, HOST, () => {
   console.log(`Finanzas dashboard running on http://${HOST}:${PORT}`);
   init().catch(err => console.error('Init error:', err.message));
-  setTimeout(() => obraSync.sync('system'), 15000);
+  setTimeout(maintenance, 15000);
   // One login at startup so Configuración shows the real IOL status, not "untested".
   if (hasIolCredentials() && iolStatus.ok == null) {
     testIolCredentials(IOL_USERNAME, IOL_PASSWORD).then(test => {

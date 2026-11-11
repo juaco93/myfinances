@@ -191,3 +191,25 @@ test('override rules beat the sender, but never manual edits or the expense shee
   finance.recategorize('test');
   assert.equal(finance.getTransaction(id).transaction?.category ?? finance.getTransaction(id).category, 'Venta auto');
 });
+
+test('linkRoundTrips cancels a payment that came back', () => {
+  const finance = createFinance(openDb(':memory:'));
+  finance.seedDefaults();
+  finance.ingestTransactions([
+    { account_id: 'mercadopago-ars', date: '2026-10-13', amount: 2700000, counterparty: 'MP usuario 309167737', description: 'Transferencia recibida', external_id: 'in' },
+    { account_id: 'mercadopago-ars', date: '2026-10-13', amount: -2700000, counterparty: 'MP usuario 309167737', description: 'Transferencia enviada', external_id: 'out' },
+    { account_id: 'mercadopago-ars', date: '2026-10-13', amount: -2700000, counterparty: 'MP usuario 200295010', description: 'Transferencia enviada', external_id: 'other' },
+    { account_id: 'mercadopago-ars', date: '2026-10-30', amount: 50000, counterparty: 'Friend', description: 'Transferencia recibida', external_id: 'f1' },
+    { account_id: 'mercadopago-ars', date: '2026-10-01', amount: -50000, counterparty: 'Friend', description: 'Transferencia enviada', external_id: 'f2' }
+  ], 'bot', { source: 'bot' });
+  assert.deepEqual(finance.linkRoundTrips(), { pairs: 1 });
+  const rows = finance.listTransactions({}).transactions;
+  const byId = id => rows.find(t => t.external_id === id);
+  assert.equal(byId('in').kind, 'transfer');
+  assert.equal(byId('out').kind, 'transfer');
+  assert.equal(byId('other').kind, 'expense', 'different counterparty');
+  assert.equal(byId('f1').kind, 'income', 'a month apart is not a round trip');
+  assert.deepEqual(finance.linkRoundTrips(), { pairs: 0 }, 'idempotent');
+  finance.recategorize('test');
+  assert.equal(finance.listTransactions({}).transactions.find(t => t.external_id === 'out').category, 'Devoluciones', 'rules leave linked legs alone');
+});
