@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+venv/
+__pycache__/
+*.pyc
+
+# secrets — never commit
+.env
+.env.*
+!.env.example
+.auth_token
+cookies.txt
+
+# local backups, temp files, logs, editor/agent state
+*.bak
+*.bak-*
+*.tmp
+*.log
+tmp/
+.claude/
+
+# runtime data written by the app (a deploy must never overwrite it)
+data/
+portfolio.json

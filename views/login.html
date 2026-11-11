@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>Ingresar · Finanzas</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2312201B'/%3E%3Ccircle cx='16' cy='16' r='8.5' fill='none' stroke='%23F1F4F2' stroke-width='2.2' stroke-dasharray='2.3 1.7'/%3E%3C/svg%3E">
+  <script>
+    try { var t = localStorage.getItem('fin.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@300..700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #F1F4F2; --sheet: #FFFFFF; --ink: #12201B; --ink-2: #4A5752; --ink-3: #66726D;
+      --rule: #DFE5E2; --rule-strong: #C8D1CC; --bad: #C2312F; --focus: #2a78d6;
+      --rosette: rgba(18, 32, 27, 0.12); --shadow: 0 1px 2px rgba(18, 32, 27, 0.06), 0 24px 60px -24px rgba(18, 32, 27, 0.35);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --paper: #0C1210; --sheet: #131A17; --ink: #E7EDEA; --ink-2: #B2BCB7; --ink-3: #8B9691;
+        --rule: #25302B; --rule-strong: #33403A; --bad: #F07575; --focus: #5598e7;
+        --rosette: rgba(231, 237, 234, 0.09); --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 24px 60px -20px rgba(0, 0, 0, 0.8);
+      }
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --paper: #0C1210; --sheet: #131A17; --ink: #E7EDEA; --ink-2: #B2BCB7; --ink-3: #8B9691;
+      --rule: #25302B; --rule-strong: #33403A; --bad: #F07575; --focus: #5598e7;
+      --rosette: rgba(231, 237, 234, 0.09); --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 24px 60px -20px rgba(0, 0, 0, 0.8);
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    * { margin: 0; }
+    body {
+      font-family: 'Chivo', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.45;
+      background: var(--paper); color: var(--ink); min-height: 100vh; min-height: 100dvh;
+      display: grid; place-items: center; padding: 24px 16px; overflow: hidden; -webkit-font-smoothing: antialiased;
+    }
+    .rosette { position: fixed; width: min(980px, 160vw); height: min(980px, 160vw); left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--rosette); pointer-events: none; }
+    main { position: relative; width: 100%; max-width: 380px; }
+    .brand { display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; font-size: 20px; letter-spacing: -0.01em; margin-bottom: 22px; }
+    .brand svg { width: 30px; height: 30px; }
+    form { background: var(--sheet); border: 1px solid var(--rule); border-radius: 14px; padding: 28px 26px 26px; display: grid; gap: 16px; box-shadow: var(--shadow); }
+    h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+    .lede { color: var(--ink-3); margin-top: -10px; }
+    label { display: grid; gap: 6px; font-size: 13px; font-weight: 500; color: var(--ink-2); }
+    input {
+      font: inherit; font-size: 15px; color: var(--ink); background: var(--sheet); height: 42px; padding: 0 12px;
+      border: 1px solid var(--rule-strong); border-radius: 8px;
+    }
+    input:focus { outline: 2px solid var(--focus); outline-offset: -1px; border-color: transparent; }
+    button {
+      font: inherit; font-weight: 600; font-size: 15px; height: 44px; margin-top: 4px; border: 0; border-radius: 8px;
+      background: var(--ink); color: var(--sheet); cursor: pointer;
+    }
+    button:hover { background: color-mix(in srgb, var(--ink) 86%, var(--sheet)); }
+    button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .error { display: flex; gap: 8px; align-items: flex-start; color: var(--bad); font-size: 13px; }
+    .error:empty { display: none; }
+    .note { text-align: center; color: var(--ink-3); font-size: 12px; margin-top: 18px; }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+  </style>
+</head>
+<body>
+  <svg class="rosette" id="rosette" aria-hidden="true"></svg>
+  <main>
+    <div class="brand"><svg id="mark" aria-hidden="true"></svg>Finanzas</div>
+    <form method="post" action="login">
+      <h1>Ingresá a tus finanzas</h1>
+      <p class="lede">Patrimonio, ingresos, gastos e inversiones.</p>
+      <label>Usuario <input name="user" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus></label>
+      <label>Contraseña <input name="password" type="password" autocomplete="current-password" required></label>
+      <div class="error" id="err" role="alert"></div>
+      <button type="submit">Ingresar</button>
+    </form>
+    <p class="note">Después de 5 intentos fallidos el acceso se bloquea por 15 minutos.</p>
+  </main>
+  <script>
+    const e = new URLSearchParams(location.search).get('e');
+    document.getElementById('err').textContent =
+      e === 'bad' ? 'El usuario o la contraseña no coinciden.' :
+      e === 'locked' ? 'Demasiados intentos. Probá de nuevo en 15 minutos.' : '';
+
+    // Same guilloche as the app (the app's scripts aren't reachable before logging in).
+    (function () {
+      const NS = 'http://www.w3.org/2000/svg';
+      const svg = document.getElementById('rosette');
+      svg.setAttribute('viewBox', '-260 -260 520 520');
+      const bands = [{ r: 238, amp: 9, lobes: 60, copies: 4 }, { r: 200, amp: 22, lobes: 36, copies: 10 }, { r: 138, amp: 30, lobes: 24, copies: 12, amp2: 8, lobes2: 6 }, { r: 76, amp: 20, lobes: 16, copies: 8 }, { r: 30, amp: 10, lobes: 10, copies: 5 }];
+      for (const b of bands) {
+        for (let c = 0; c < b.copies; c++) {
+          const ph = (2 * Math.PI * c) / b.copies;
+          let d = '';
+          for (let i = 0, n = b.lobes * 24; i <= n; i++) {
+            const t = (i / n) * 2 * Math.PI;
+            const r = b.r + b.amp * Math.sin(b.lobes * t + ph) + (b.amp2 || 0) * Math.cos((b.lobes2 || 0) * t);
+            d += (i ? 'L' : 'M') + (r * Math.cos(t)).toFixed(1) + ' ' + (r * Math.sin(t)).toFixed(1);
+          }
+          const p = document.createElementNS(NS, 'path');
+          p.setAttribute('d', d + 'Z'); p.setAttribute('fill', 'none'); p.setAttribute('stroke', 'currentColor'); p.setAttribute('stroke-width', '0.5');
+          svg.appendChild(p);
+        }
+      }
+      const mark = document.getElementById('mark');
+      mark.setAttribute('viewBox', '0 0 32 32');
+      const ring = ph => { let d = ''; for (let i = 0; i <= 144; i++) { const t = (i / 144) * 2 * Math.PI; const r = 8.6 + 2.1 * Math.sin(9 * t + ph); d += (i ? 'L' : 'M') + (16 + r * Math.cos(t)).toFixed(2) + ' ' + (16 + r * Math.sin(t)).toFixed(2); } return '<path d="' + d + 'Z" fill="none" stroke="currentColor" stroke-width="1.15"/>'; };
+      mark.innerHTML = '<circle cx="16" cy="16" r="14.6" fill="none" stroke="currentColor" stroke-width="1.6"/>' + ring(0) + ring(Math.PI) + '<circle cx="16" cy="16" r="1.7" fill="currentColor"/>';
+    })();
+  </script>
+</body>
+</html>

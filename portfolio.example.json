@@ -1,0 +1,23 @@
+{
+  "holdings": [
+    {
+      "ticker": "GGAL",
+      "yahooTicker": "GGAL.BA",
+      "quantity": 0,
+      "avgPrice": 0.0,
+      "type": "accion",
+      "name": "Example holding"
+    }
+  ],
+  "cash": {
+    "ars": 0.0,
+    "usd": 0.0
+  },
+  "virtual": {
+    "ars": 0,
+    "usd": 0
+  },
+  "crypto": {
+    "usdt": 0
+  }
+}

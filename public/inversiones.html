@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Inversiones · Finanzas</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2312201B'/%3E%3Ccircle cx='16' cy='16' r='8.5' fill='none' stroke='%23F1F4F2' stroke-width='2.2' stroke-dasharray='2.3 1.7'/%3E%3C/svg%3E">
+  <script>
+    try { var t = localStorage.getItem('fin.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@300..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="app.css?v=3">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="app.js?v=3"></script>
+  <style>
+    .returns { border-collapse: separate; border-spacing: 3px; width: 100%; min-width: 760px; }
+    .returns th { border: 0; padding: 0 0 6px; text-align: center; font-variant-numeric: tabular-nums; }
+    .returns th:first-child { text-align: left; }
+    .returns td { border: 0; padding: 0; height: 40px; text-align: center; font-size: 13px; font-weight: 500; border-radius: 4px; font-variant-numeric: tabular-nums; }
+    .returns td.year { text-align: left; font-weight: 600; color: var(--ink-2); padding-right: 8px; background: none; }
+    .returns td.total { font-weight: 700; box-shadow: inset 0 0 0 1px var(--rule-strong); }
+    .returns td.none { background: none; color: var(--ink-3); font-weight: 400; }
+    .scale { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--ink-3); margin-top: 14px; flex-wrap: wrap; }
+    .scale i { display: inline-block; width: 22px; height: 10px; border-radius: 2px; }
+    .scale span { margin: 0 6px; }
+    .holdings th button { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+    .holdings th button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
+    .holdings th[aria-sort] button { color: var(--ink); }
+    .holdings th .arrow { font-size: 10px; width: 8px; }
+    .holdings tbody tr { cursor: pointer; }
+    .holdings tbody tr:hover td { background: var(--sheet-2); }
+    .holdings .ticker { font-weight: 600; }
+    .holdings .tname { color: var(--ink-3); font-size: 12px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .type { display: inline-block; font-size: 11px; color: var(--ink-2); border: 1px solid var(--rule-strong); border-radius: 4px; padding: 0 5px; margin-left: 6px; vertical-align: 1px; font-weight: 500; }
+    .up { color: var(--good); }
+    .down { color: var(--bad); }
+    .composition .label strong { font-weight: 600; margin-right: 6px; }
+    .saldos li { grid-template-columns: minmax(0, 1fr) auto; }
+    @media (max-width: 640px) {
+      .holdings th:first-child, .holdings td:first-child { position: sticky; left: 0; background: var(--sheet); z-index: 1; }
+      .holdings tbody tr:hover td:first-child { background: var(--sheet-2); }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="./#resumen"><svg data-mark></svg>Finanzas</a>
+      <nav class="nav" aria-label="Secciones">
+        <a href="./#resumen" data-nav="resumen">Resumen</a>
+        <a href="./#movimientos" data-nav="movimientos">Movimientos</a>
+        <a href="inversiones.html" data-nav="inversiones">Inversiones</a>
+        <a href="./#config" data-nav="config">Configuración</a>
+      </nav>
+      <div class="topbar-end">
+        <span class="fx-chip" id="fxNote"></span>
+        <form method="post" action="logout"><button class="btn small" type="submit">Salir</button></form>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabbar" aria-label="Secciones">
+    <a href="./#resumen" data-nav="resumen" data-icon="resumen">Resumen</a>
+    <a href="./#movimientos" data-nav="movimientos" data-icon="movimientos">Movimientos</a>
+    <a href="inversiones.html" data-nav="inversiones" data-icon="inversiones">Inversiones</a>
+    <a href="./#config" data-nav="config" data-icon="config">Ajustes</a>
+  </nav>
+
+  <div class="shell">
+  <main class="page" id="main">
+    <div class="notice" id="notice" role="alert" hidden></div>
+
+    <section class="hero" aria-labelledby="heroLabel">
+      <svg class="rosette" id="rosette"></svg>
+      <div class="hero-top">
+        <div><h1 class="hero-label" id="heroLabel">Inversiones <time id="lastUpdate"></time></h1><p id="sourceBadge" style="margin-top: 6px"></p></div>
+        <div class="toolbar">
+          <div class="seg" id="currencySeg" role="group" aria-label="Moneda">
+            <button type="button" data-currency="ars">Pesos</button>
+            <button type="button" data-currency="mep">Dólares MEP</button>
+            <button type="button" data-currency="ccl">Dólares CCL</button>
+          </div>
+          <div class="seg" id="rangeSeg" role="group" aria-label="Período">
+            <button type="button" data-range="7">1S</button>
+            <button type="button" data-range="30">1M</button>
+            <button type="button" data-range="90">3M</button>
+            <button type="button" data-range="180">6M</button>
+            <button type="button" data-range="365">1A</button>
+            <button type="button" data-range="0">Todo</button>
+          </div>
+        </div>
+      </div>
+      <p class="hero-figure refetch" id="totalValue">—</p>
+      <p class="hero-twin" id="heroTwin"></p>
+      <p class="hero-delta" id="totalChange"></p>
+      <div class="hero-chart refetch"><canvas id="lineChart" role="img" aria-label="Evolución del valor de la cartera"></canvas></div>
+    </section>
+
+    <section class="kpis" aria-label="Resultado de la cartera">
+      <div class="kpi"><div class="kpi-label">Costo de compra</div><div class="kpi-value" id="cardInvested">—</div><div class="kpi-sub">lo que pagaste por las tenencias</div></div>
+      <div class="kpi"><div class="kpi-label">Valor de mercado</div><div class="kpi-value" id="cardHoldings">—</div><div class="kpi-sub" id="cardHoldingsSub"></div></div>
+      <div class="kpi"><div class="kpi-label">Resultado <button type="button" class="tip" aria-label="Qué incluye">?<span class="tip-text">Diferencia entre el valor actual de tus tenencias y lo que pagaste por ellas. No incluye dividendos cobrados.</span></button></div><div class="kpi-value" id="cardGainLoss">—</div><div class="kpi-sub" id="cardGainLossPct"></div></div>
+      <div class="kpi"><div class="kpi-label">Disponible y cripto</div><div class="kpi-value" id="cardCash">—</div><div class="kpi-sub">fuera de las tenencias</div></div>
+    </section>
+
+    <div class="grid wide-narrow" style="align-items: start">
+      <section class="panel" aria-labelledby="compTitle">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title" id="compTitle">Composición</h2>
+            <p class="panel-sub">Peso de cada activo en el valor de mercado. Tocá uno para ver su precio.</p>
+          </div>
+        </div>
+        <ul class="bars composition" id="composition"></ul>
+      </section>
+      <section class="panel" id="saldos" aria-labelledby="saldosTitle">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title" id="saldosTitle">Saldos</h2>
+            <p class="panel-sub" id="saldosSub"></p>
+          </div>
+          <button type="button" class="btn small" id="editCash">Editar</button>
+        </div>
+        <ul class="ledger saldos" id="saldoList"></ul>
+      </section>
+    </div>
+
+    <section class="kpis" id="riskCards" aria-label="Riesgo y rendimiento" hidden>
+      <div class="kpi"><div class="kpi-label">Retorno anual en dólares <button type="button" class="tip" aria-label="Qué mide">?<span class="tip-text">Cuánto rinde tu cartera por año medida en dólares MEP. Incluye la variación de precios y el efecto del tipo de cambio.</span></button></div><div class="kpi-value" id="cardAnnualReturn">—</div><div class="kpi-sub">anualizado</div></div>
+      <div class="kpi"><div class="kpi-label">Volatilidad anual <button type="button" class="tip" aria-label="Qué mide">?<span class="tip-text">Cuánto fluctúa tu cartera. Menos de 10 % es conservadora, entre 10 y 20 % moderada, más de 20 % agresiva.</span></button></div><div class="kpi-value" id="cardVolatility">—</div><div class="kpi-sub" id="cardVolatilitySub"></div></div>
+      <div class="kpi"><div class="kpi-label">Máxima caída <button type="button" class="tip" aria-label="Qué mide">?<span class="tip-text">La peor caída desde un pico hasta un valle. Si tenías $ 100 y bajó a $ 91, la caída fue de 9 %. Cuanto menor, mejor.</span></button></div><div class="kpi-value" id="cardDrawdown">—</div><div class="kpi-sub">desde un pico</div></div>
+      <div class="kpi"><div class="kpi-label">Índice de Sharpe <button type="button" class="tip" aria-label="Qué mide">?<span class="tip-text">Retorno ajustado por riesgo. Más de 1 es excelente, entre 0,5 y 1 bueno, menos de 0 significa que no compensás el riesgo que tomás.</span></button></div><div class="kpi-value" id="cardSharpe">—</div><div class="kpi-sub">tasa libre de riesgo: 5 % en dólares</div></div>
+    </section>
+
+    <div class="grid halves" id="advancedCharts" hidden>
+      <section class="panel" aria-labelledby="benchTitle">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title" id="benchTitle">Tu cartera contra los índices</h2>
+            <p class="panel-sub">En dólares, base 100 al inicio del período</p>
+            <div class="legend" id="benchLegend" style="margin-top: 8px"></div>
+          </div>
+        </div>
+        <div class="chart"><canvas id="benchmarkChart" role="img" aria-label="Cartera comparada con S&P 500 y Merval"></canvas></div>
+      </section>
+      <section class="panel" aria-labelledby="dollarTitle">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title" id="dollarTitle">Dólar MEP y CCL</h2>
+            <p class="panel-sub" id="dollarSub"></p>
+            <div class="legend" style="margin-top: 8px"><span><i class="key line" style="--c: var(--blue)"></i>MEP</span><span><i class="key line" style="--c: var(--orange)"></i>CCL</span></div>
+          </div>
+        </div>
+        <div class="chart"><canvas id="dollarChart" role="img" aria-label="Evolución del dólar MEP y CCL"></canvas></div>
+      </section>
+    </div>
+
+    <section class="panel" id="heatmapBox" aria-labelledby="returnsTitle" style="margin-bottom: 20px" hidden>
+      <div class="panel-head">
+        <div>
+          <h2 class="panel-title" id="returnsTitle">Rendimiento mensual en dólares MEP</h2>
+          <p class="panel-sub">Cuánto subió o bajó la cartera cada mes, y el acumulado de cada año.</p>
+        </div>
+      </div>
+      <div class="table-wrap" id="heatmapContainer"></div>
+      <div class="scale" id="returnsScale" aria-hidden="true"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="holdTitle">
+      <div class="panel-head">
+        <div>
+          <h2 class="panel-title" id="holdTitle">Tenencias</h2>
+          <p class="panel-sub" id="holdSub"></p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="holdings" id="holdingsTable">
+          <thead>
+            <tr>
+              <th data-sort="ticker"><button type="button">Activo<span class="arrow"></span></button></th>
+              <th class="num" data-sort="quantity"><button type="button">Cantidad<span class="arrow"></span></button></th>
+              <th class="num" data-sort="avgPrice"><button type="button">Precio de compra<span class="arrow"></span></button></th>
+              <th class="num" data-sort="currentPrice"><button type="button">Precio actual<span class="arrow"></span></button></th>
+              <th class="num" data-sort="dailyChangePercent"><button type="button">Hoy<span class="arrow"></span></button></th>
+              <th class="num" data-sort="currentValue"><button type="button">Valorizado<span class="arrow"></span></button></th>
+              <th class="num" data-sort="gainLossPercent"><button type="button">Rendimiento<span class="arrow"></span></button></th>
+              <th class="num" data-sort="gainLoss"><button type="button">Resultado<span class="arrow"></span></button></th>
+            </tr>
+          </thead>
+          <tbody id="holdingsBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  </div>
+
+  <div class="modal-overlay" id="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal wide">
+      <div class="modal-head">
+        <div>
+          <h2 id="modalTitle">—</h2>
+          <p class="sub" id="modalSub"></p>
+        </div>
+        <button type="button" class="icon-btn" data-close aria-label="Cerrar" data-icon="close"></button>
+      </div>
+      <div class="chart"><canvas id="modalChart" role="img" aria-label="Precio histórico del activo"></canvas></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="cashModalOverlay" role="dialog" aria-modal="true" aria-labelledby="cashTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h2 id="cashTitle">Editar saldos</h2>
+          <p class="sub" id="cashSub"></p>
+        </div>
+        <button type="button" class="icon-btn" data-close aria-label="Cerrar" data-icon="close"></button>
+      </div>
+      <form class="form" id="cashForm">
+        <div class="form" id="cashLocalFields">
+          <label class="field"><span>Efectivo en pesos</span><input class="input" type="number" id="cashArsInput" step="0.01" inputmode="decimal"></label>
+          <label class="field"><span>Efectivo en dólares</span><input class="input" type="number" id="cashUsdInput" step="0.01" inputmode="decimal"></label>
+          <label class="field"><span>Saldo virtual en pesos</span><input class="input" type="number" id="virtualArsInput" step="0.01" inputmode="decimal"></label>
+          <label class="field"><span>Saldo virtual en dólares</span><input class="input" type="number" id="virtualUsdInput" step="0.01" inputmode="decimal"></label>
+        </div>
+        <label class="field"><span>Cripto (USDT)</span><input class="input" type="number" id="cryptoUsdtInput" step="0.01" inputmode="decimal"></label>
+        <div class="error" id="cashError" role="alert"></div>
+        <div class="actions">
+          <button type="button" class="btn" data-close>Cancelar</button>
+          <button type="submit" class="btn primary">Guardar saldos</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const { money, pct, number } = Fin;
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const RANGE_TEXT = { 7: 'en la última semana', 30: 'en el último mes', 90: 'en los últimos 3 meses', 180: 'en los últimos 6 meses', 365: 'en el último año' };
+    const TYPE_LABEL = { cedear: 'CEDEAR', cedears: 'CEDEAR', bono: 'Bono', bonos: 'Bono', accion: 'Acción', acciones: 'Acción', on: 'ON', letra: 'Letra', fci: 'FCI' };
+
+    let currentCurrency = readPref('preferredCurrency', 'ars');
+    let timeRangeDays = Number(readPref('fin.invRange', '0')) || 0;
+    let dollarRates = null;
+    let portfolioData = null;
+    let historyData = null;
+    let sortCol = 'currentValue';
+    let sortAsc = false;
+    const charts = {};
+
+    function readPref(key, fallback) { try { return localStorage.getItem(key) || fallback; } catch (e) { return fallback; } }
+    function writePref(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* storage unavailable */ } }
+
+    const isUsd = () => currentCurrency !== 'ars';
+    const rate = () => currentCurrency === 'mep' ? dollarRates?.mep : currentCurrency === 'ccl' ? dollarRates?.ccl : 1;
+    const conv = v => isUsd() ? (rate() ? v / rate() : null) : v;
+    const fmtMoney = (v, opts) => money(conv(v), isUsd() ? 'USD' : 'ARS', opts);
+    const fmtNative = (v, opts) => money(v, isUsd() ? 'USD' : 'ARS', opts);
+    const signClass = v => v > 0 ? 'up' : v < 0 ? 'down' : '';
+    const share = p => p > 0 && p < 1 ? '<1 %' : `${Math.round(p)} %`;
+
+    function drawChart(id, config) {
+      if (charts[id]) charts[id].destroy();
+      charts[id] = new Chart(document.getElementById(id), config);
+    }
+
+    function filterByRange(rows, key = 'date') {
+      if (!timeRangeDays) return rows;
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - timeRangeDays);
+      const cut = cutoff.toISOString().slice(0, 10);
+      return rows.filter(r => r[key] >= cut);
+    }
+
+    function showError(error) {
+      console.error(error);
+      const box = document.getElementById('notice');
+      box.textContent = `No se pudieron cargar los datos de la cartera: ${error.message}. Recargá la página para reintentar.`;
+      box.hidden = false;
+    }
+
+    // ---------- Header ----------
+
+    function updateHeader(data) {
+      Fin.figure(document.getElementById('totalValue'), conv(data.totalValue), isUsd() ? 'USD' : 'ARS');
+      const twin = document.getElementById('heroTwin');
+      twin.textContent = isUsd() ? money(data.totalValue, 'ARS') : (dollarRates?.mep ? money(data.totalValue / dollarRates.mep, 'USD') : '');
+      const rateValue = currentCurrency === 'ccl' ? dollarRates?.ccl : dollarRates?.mep;
+      if (rateValue) {
+        const r = document.createElement('span');
+        r.className = 'muted';
+        r.textContent = `con el dólar ${currentCurrency === 'ccl' ? 'CCL' : 'MEP'} a ${money(rateValue, 'ARS', { decimals: 2 })}`;
+        twin.append(r);
+      }
+      const when = data.lastUpdate ? new Date(data.lastUpdate) : null;
+      document.getElementById('lastUpdate').textContent = when
+        ? `al ${Fin.shortDate(when.toISOString())}, ${when.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' })}`
+        : '';
+      document.getElementById('sourceBadge').innerHTML = data.source === 'iol'
+        ? `<span class="badge good">${Fin.icon('sync')}En vivo desde IOL</span>`
+        : `<span class="badge serious">${Fin.icon('alert')}Datos locales: IOL no está conectado.</span> <a class="link" href="./#config" style="font-size: 12px">Conectar</a>`;
+      document.getElementById('fxNote').innerHTML = dollarRates?.mep ? `MEP <strong>${esc(money(dollarRates.mep, 'ARS', { decimals: 2 }))}</strong>` : '';
+      renderDelta();
+    }
+
+    function renderDelta() {
+      const el = document.getElementById('totalChange');
+      el.textContent = '';
+      let diff, rel, label;
+      const filtered = historyData ? filterByRange(historyData) : [];
+      if (timeRangeDays && filtered.length >= 2) {
+        const key = currentCurrency === 'mep' ? 'totalValueUsdMep' : currentCurrency === 'ccl' ? 'totalValueUsdCcl' : 'totalValue';
+        const first = filtered[0][key];
+        const last = filtered[filtered.length - 1][key];
+        diff = last - first;
+        rel = first ? (diff / first) * 100 : 0;
+        label = RANGE_TEXT[timeRangeDays];
+        el.append(deltaSpan(diff, rel, fmtNative), muted(label));
+      } else if (portfolioData) {
+        diff = portfolioData.totalGainLoss;
+        rel = portfolioData.totalGainLossPercent;
+        el.append(deltaSpan(diff, rel, fmtMoney), muted('de resultado sobre lo invertido'));
+      }
+    }
+    function deltaSpan(diff, rel, formatter) {
+      const d = document.createElement('span');
+      d.className = `delta ${diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat'}`;
+      d.textContent = `${diff > 0 ? '▲' : diff < 0 ? '▼' : '■'} ${formatter(Math.abs(diff))} (${pct(rel)})`;
+      return d;
+    }
+    function muted(text) { const s = document.createElement('span'); s.className = 'muted'; s.textContent = text; return s; }
+
+    // ---------- Cards ----------
+
+    function updateCards(data) {
+      const holdingsValue = data.holdingsValue ?? data.holdings.reduce((s, h) => s + (h.currentValue || 0), 0);
+      document.getElementById('cardInvested').textContent = fmtMoney(data.totalInvested);
+      document.getElementById('cardHoldings').textContent = fmtMoney(holdingsValue);
+      document.getElementById('cardHoldingsSub').textContent = `${data.holdings.length} activos`;
+      const gl = document.getElementById('cardGainLoss');
+      gl.textContent = fmtMoney(data.totalGainLoss, { sign: true });
+      gl.className = `kpi-value ${signClass(data.totalGainLoss)}`;
+      document.getElementById('cardGainLossPct').textContent = `${pct(data.totalGainLossPercent)} sobre el costo`;
+      document.getElementById('cardCash').textContent = fmtMoney(data.totalValue - holdingsValue);
+      renderComposition(data, holdingsValue);
+      renderSaldos(data);
+    }
+
+    function renderComposition(data, holdingsValue) {
+      const rows = data.holdings.slice().sort((a, b) => b.currentValue - a.currentValue);
+      const max = rows[0]?.currentValue || 1;
+      document.getElementById('composition').innerHTML = rows.map(h => `<li><button type="button" class="row" data-ticker="${esc(h.ticker)}">
+          <span class="label"><strong>${esc(h.ticker)}</strong><small>${esc(h.name || '')}</small></span><span class="value">${fmtMoney(h.currentValue)}</span>
+          <span class="meter"><span class="track"><span class="fill" style="width:${(h.currentValue / max * 100).toFixed(1)}%"></span></span><span class="pct">${share(h.currentValue / (holdingsValue || 1) * 100)}</span></span>
+        </button></li>`).join('') || '<li class="empty">No hay tenencias.</li>';
+    }
+
+    function renderSaldos(data) {
+      const iol = data.source === 'iol';
+      const rows = iol
+        ? [['Disponible en IOL, pesos', data.cash.ars, 'ARS'], ['Disponible en IOL, dólares', data.cash.usd, 'USD'],
+           ...(data.virtual?.ars ? [['Cuenta administrada, pesos', data.virtual.ars, 'ARS']] : []),
+           ...(data.virtual?.usd ? [['Cuenta administrada, dólares', data.virtual.usd, 'USD']] : []),
+           ['Cripto', data.crypto?.usdt || 0, 'USDT']]
+        : [['Efectivo, pesos', data.cash.ars, 'ARS'], ['Efectivo, dólares', data.cash.usd, 'USD'],
+           ['Virtual, pesos', data.virtual?.ars || 0, 'ARS'], ['Virtual, dólares', data.virtual?.usd || 0, 'USD'],
+           ['Cripto', data.crypto?.usdt || 0, 'USDT']];
+      document.getElementById('saldosSub').textContent = iol ? 'El disponible se lee de IOL. La cripto la cargás vos.' : 'Cargados a mano';
+      document.getElementById('saldoList').innerHTML = rows.map(([label, amount, cur]) => {
+        const inArs = cur === 'ARS' ? amount : (dollarRates?.mep ? amount * dollarRates.mep : null);
+        const other = cur === 'ARS' ? (dollarRates?.mep && amount ? money(amount / dollarRates.mep, 'USD') : '') : (inArs ? money(inArs, 'ARS') : '');
+        return `<li class="${amount ? '' : 'dim'}"><div class="name">${esc(label)}</div><div><div class="amount">${money(amount, cur)}</div><div class="conv">${other ? `≈ ${other}` : ''}</div></div></li>`;
+      }).join('');
+    }
+
+    // ---------- Charts ----------
+
+    function renderLineChart(history) {
+      if (!history?.length) return;
+      const t = Fin.tokens();
+      const filtered = filterByRange(history);
+      if (!filtered.length) return;
+      const key = currentCurrency === 'mep' ? 'totalValueUsdMep' : currentCurrency === 'ccl' ? 'totalValueUsdCcl' : 'totalValue';
+      const rateKey = currentCurrency === 'mep' ? 'dollarMep' : 'dollarCcl';
+      const values = filtered.map(h => h[key] ?? (isUsd() && h[rateKey] ? h.totalValue / h[rateKey] : null));
+      const dates = filtered.map(h => h.date);
+      drawChart('lineChart', {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: [{
+            label: 'Valor', data: values, borderColor: t.blue, borderWidth: 2, backgroundColor: Fin.lineGradient(t['blue-wash']), fill: true,
+            pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: t.blue, pointHoverBorderColor: t.paper, pointHoverBorderWidth: 2,
+            tension: 0.2, spanGaps: true
+          }]
+        },
+        options: {
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { grid: { display: false }, border: { color: t['rule-strong'] }, ticks: { autoSkip: false, maxRotation: 0, callback: Fin.monthTicks(dates, window.innerWidth < 640 ? 4 : 9) } },
+            y: { position: 'right', grid: { color: t.rule }, border: { display: false }, ticks: { maxTicksLimit: 5, callback: v => fmtNative(v, { compact: true }) } }
+          },
+          plugins: { tooltip: { displayColors: false, callbacks: { title: items => Fin.longDay(items[0].label), label: ctx => fmtNative(ctx.parsed.y) } } }
+        },
+        plugins: [Fin.crosshair]
+      });
+    }
+
+    async function loadAdvanced() {
+      try {
+        const rangeParam = timeRangeDays ? `?days=${timeRangeDays}` : '';
+        const [benchData, riskData] = await Promise.all([
+          fetch('api/benchmarks' + rangeParam).then(r => r.json()),
+          fetch('api/risk' + rangeParam).then(r => r.json())
+        ]);
+        document.getElementById('riskCards').hidden = false;
+        document.getElementById('advancedCharts').hidden = false;
+        document.getElementById('heatmapBox').hidden = false;
+        renderRisk(riskData);
+        renderBenchmarks(benchData);
+        renderDollar(riskData.dollarHistory || []);
+        renderReturns(riskData.monthlyReturns || []);
+      } catch (err) {
+        console.error('Advanced charts error:', err);
+      }
+    }
+
+    function renderRisk(risk) {
+      const ar = parseFloat(risk.annualReturn);
+      const vol = parseFloat(risk.volatility);
+      const dd = parseFloat(risk.maxDrawdown);
+      const sh = parseFloat(risk.sharpe);
+      const set = (id, text, cls = '') => { const el = document.getElementById(id); el.textContent = text; el.className = `kpi-value ${cls}`; };
+      set('cardAnnualReturn', Number.isFinite(ar) ? pct(ar) : '—', signClass(ar));
+      set('cardVolatility', Number.isFinite(vol) ? pct(vol, { sign: false }) : '—');
+      document.getElementById('cardVolatilitySub').textContent = !Number.isFinite(vol) ? '' : vol < 10 ? 'conservadora' : vol <= 20 ? 'moderada' : 'agresiva';
+      set('cardDrawdown', Number.isFinite(dd) ? pct(-dd) : '—', dd > 0 ? 'down' : '');
+      set('cardSharpe', Number.isFinite(sh) ? number(sh, 2) : '—', sh >= 1 ? 'up' : sh < 0 ? 'down' : '');
+    }
+
+    function renderBenchmarks(bench) {
+      const t = Fin.tokens();
+      const series = [
+        { label: 'Tu cartera', data: bench.portfolio, color: t.blue, width: 2 },
+        { label: 'S&P 500', data: bench.spy, color: t.orange, width: 1.5 },
+        { label: 'Merval', data: bench.merval, color: t.aqua, width: 1.5 }
+      ];
+      // A benchmark with no prices comes back empty or pinned at 100: hide it instead of drawing a fake flat line.
+      const usable = s => {
+        const vals = (s.data || []).map(v => (v == null ? NaN : Number(v))).filter(Number.isFinite);
+        return vals.length > 1 && Math.max(...vals) - Math.min(...vals) > 0.01;
+      };
+      const shown = series.filter((s, i) => i === 0 || usable(s));
+      const missing = series.filter((s, i) => i > 0 && !usable(s)).map(s => s.label);
+      document.getElementById('benchLegend').innerHTML = shown.map(s => `<span><i class="key line" style="--c:${s.color}"></i>${esc(s.label)}</span>`).join('')
+        + (missing.length ? `<span class="muted">Sin datos de ${esc(missing.join(' ni '))} en este período</span>` : '');
+      const dates = bench.dates || [];
+      drawChart('benchmarkChart', {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: shown.map(s => ({ label: s.label, data: s.data.map(v => v == null ? null : Number(v)), borderColor: s.color, backgroundColor: s.color, borderWidth: s.width, pointRadius: 0, pointHoverRadius: 4, pointHoverBorderColor: t.sheet, pointHoverBorderWidth: 2, tension: 0.2, spanGaps: true }))
+        },
+        options: {
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { grid: { display: false }, border: { color: t['rule-strong'] }, ticks: { autoSkip: false, maxRotation: 0, callback: Fin.monthTicks(dates, 6) } },
+            y: { grid: { color: t.rule }, border: { display: false }, ticks: { maxTicksLimit: 6 } }
+          },
+          plugins: { tooltip: { callbacks: { title: items => Fin.longDay(items[0].label), label: ctx => ` ${number(ctx.parsed.y, 1)}  ${ctx.dataset.label}` } } }
+        },
+        plugins: [Fin.crosshair]
+      });
+    }
+
+    function renderDollar(history) {
+      const t = Fin.tokens();
+      const rows = filterByRange(history);
+      const last = rows[rows.length - 1];
+      const first = rows[0];
+      document.getElementById('dollarSub').textContent = last && first && first.mep
+        ? `El MEP ${last.mep >= first.mep ? 'subió' : 'bajó'} ${pct(((last.mep - first.mep) / first.mep) * 100, { sign: false })} ${timeRangeDays ? RANGE_TEXT[timeRangeDays] : 'desde el primer registro'}`
+        : '';
+      const dates = rows.map(d => d.date);
+      const line = (label, key, color) => ({ label, data: rows.map(d => d[key]), borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, pointHoverBorderColor: t.sheet, pointHoverBorderWidth: 2, tension: 0.2, spanGaps: true });
+      drawChart('dollarChart', {
+        type: 'line',
+        data: { labels: dates, datasets: [line('MEP', 'mep', t.blue), line('CCL', 'ccl', t.orange)] },
+        options: {
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { grid: { display: false }, border: { color: t['rule-strong'] }, ticks: { autoSkip: false, maxRotation: 0, callback: Fin.monthTicks(dates, 6) } },
+            y: { grid: { color: t.rule }, border: { display: false }, ticks: { maxTicksLimit: 6, callback: v => money(v, 'ARS') } }
+          },
+          plugins: { tooltip: { callbacks: { title: items => Fin.longDay(items[0].label), label: ctx => ` ${money(ctx.parsed.y, 'ARS', { decimals: 2 })}  ${ctx.dataset.label}` } } }
+        },
+        plugins: [Fin.crosshair]
+      });
+    }
+
+    // Diverging scale (blue gains, red losses, neutral gray near zero), stepped for each theme.
+    function returnColor(r) {
+      const dark = Fin.theme.effective() === 'dark';
+      const pos = dark ? ['#1b3150', '#1f4c85', '#2f6fbe', '#4a93ea'] : ['#dce9fa', '#b2cff4', '#6da7ec', '#2a78d6'];
+      const neg = dark ? ['#3d2323', '#642d2d', '#a43c3c', '#e25d5d'] : ['#fbe2e1', '#f5bdbb', '#e98785', '#c93a39'];
+      const a = Math.abs(r);
+      if (a < 0.5) return { bg: dark ? '#222b27' : '#e9eeeb', fg: dark ? '#b2bcb7' : '#4a5752' };
+      const step = a < 2 ? 0 : a < 5 ? 1 : a < 10 ? 2 : 3;
+      const bg = (r > 0 ? pos : neg)[step];
+      const fg = step >= 2 ? '#ffffff' : (dark ? '#e7edea' : '#12201b');
+      return { bg, fg };
+    }
+
+    function renderReturns(monthly) {
+      const box = document.getElementById('heatmapContainer');
+      if (!monthly.length) { box.innerHTML = '<p class="empty">Todavía no hay datos suficientes.</p>'; return; }
+      const byYear = {};
+      for (const m of monthly) {
+        const [y, mon] = m.month.split('-').map(Number);
+        (byYear[y] = byYear[y] || {})[mon] = m.returnPct;
+      }
+      const years = Object.keys(byYear).map(Number).sort();
+      const cell = r => {
+        if (r == null) return '<td class="none">·</td>';
+        const { bg, fg } = returnColor(r);
+        return `<td style="background:${bg};color:${fg}">${pct(r, { decimals: 1 })}</td>`;
+      };
+      box.innerHTML = `<table class="returns">
+        <thead><tr><th><span class="sr-only">Año</span></th>${Fin.MONTHS.map(m => `<th>${m}</th>`).join('')}<th>Acumulado</th></tr></thead>
+        <tbody>${years.map(y => {
+          const vals = byYear[y];
+          const months = Object.values(vals);
+          const total = months.length ? (months.reduce((acc, r) => acc * (1 + r / 100), 1) - 1) * 100 : null;
+          const { bg, fg } = total == null ? { bg: 'none', fg: '' } : returnColor(total);
+          return `<tr><td class="year">${y}</td>${Array.from({ length: 12 }, (_, i) => cell(vals[i + 1])).join('')}<td class="total" style="background:${bg};color:${fg}">${total == null ? '·' : pct(total, { decimals: 1 })}</td></tr>`;
+        }).join('')}</tbody></table>`;
+      const steps = [-10, -5, -2, -0.6, 0, 0.6, 2, 5, 10];
+      document.getElementById('returnsScale').innerHTML = `<span>−10 %</span>${steps.map(s => `<i style="background:${returnColor(s === 0 ? 0 : s + Math.sign(s) * 0.1).bg}"></i>`).join('')}<span>+10 %</span>`;
+    }
+
+    // ---------- Holdings table ----------
+
+    function renderTable(data) {
+      const sorted = [...data.holdings].sort((a, b) => {
+        const va = a[sortCol], vb = b[sortCol];
+        if (typeof va === 'string') return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+        return sortAsc ? va - vb : vb - va;
+      });
+      document.querySelectorAll('.holdings th[data-sort]').forEach(th => {
+        const active = th.dataset.sort === sortCol;
+        if (active) th.setAttribute('aria-sort', sortAsc ? 'ascending' : 'descending');
+        else th.removeAttribute('aria-sort');
+        th.querySelector('.arrow').textContent = active ? (sortAsc ? '▲' : '▼') : '';
+      });
+      document.getElementById('holdSub').textContent = `${data.holdings.length} activos. Tocá una fila para ver la evolución del precio.`;
+      document.getElementById('holdingsBody').innerHTML = sorted.map(h => {
+        const type = TYPE_LABEL[String(h.type || '').toLowerCase()] || h.type || '';
+        return `<tr data-ticker="${esc(h.ticker)}" tabindex="0">
+          <td><span class="ticker">${esc(h.ticker)}</span>${type ? `<span class="type">${esc(type)}</span>` : ''}<div class="tname">${esc(h.name || '')}</div></td>
+          <td class="num">${number(h.quantity, 4)}</td>
+          <td class="num">${fmtMoney(h.avgPrice)}</td>
+          <td class="num">${h.error ? '<span class="muted">sin precio</span>' : fmtMoney(h.currentPrice)}</td>
+          <td class="num ${signClass(h.dailyChangePercent)}">${pct(h.dailyChangePercent, { decimals: 2 })}</td>
+          <td class="num">${fmtMoney(h.currentValue)}</td>
+          <td class="num ${signClass(h.gainLossPercent)}">${pct(h.gainLossPercent, { decimals: 1 })}</td>
+          <td class="num ${signClass(h.gainLoss)}">${fmtMoney(h.gainLoss, { sign: true })}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    document.querySelectorAll('.holdings th[data-sort] button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const col = btn.closest('th').dataset.sort;
+        if (sortCol === col) sortAsc = !sortAsc;
+        else { sortCol = col; sortAsc = col === 'ticker'; }
+        renderTable(portfolioData);
+      });
+    });
+
+    // ---------- Ticker modal ----------
+
+    async function showTickerChart(ticker) {
+      const h = portfolioData?.holdings.find(x => x.ticker === ticker);
+      document.getElementById('modalTitle').textContent = ticker;
+      document.getElementById('modalSub').textContent = h ? `${h.name || ''}${h.name ? '. ' : ''}Precio en pesos.` : 'Precio en pesos.';
+      openModal('modalOverlay');
+      try {
+        const data = await fetch(`api/prices/${encodeURIComponent(ticker)}`).then(r => r.json());
+        const t = Fin.tokens();
+        const dates = data.prices.map(p => p.date);
+        drawChart('modalChart', {
+          type: 'line',
+          data: { labels: dates, datasets: [{ label: ticker, data: data.prices.map(p => p.close), borderColor: t.blue, borderWidth: 2, backgroundColor: Fin.lineGradient(t['blue-wash']), fill: true, pointRadius: 0, pointHoverRadius: 4, tension: 0.2 }] },
+          options: {
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              x: { grid: { display: false }, border: { color: t['rule-strong'] }, ticks: { autoSkip: false, maxRotation: 0, callback: Fin.monthTicks(dates, 8) } },
+              y: { position: 'right', grid: { color: t.rule }, border: { display: false }, ticks: { maxTicksLimit: 5, callback: v => money(v, 'ARS', { compact: v >= 1e6 }) } }
+            },
+            plugins: { tooltip: { displayColors: false, callbacks: { title: items => Fin.longDay(items[0].label), label: ctx => money(ctx.parsed.y, 'ARS') } } }
+          },
+          plugins: [Fin.crosshair]
+        });
+      } catch (err) {
+        document.getElementById('modalSub').textContent = `No se pudo cargar el precio de ${ticker}.`;
+      }
+    }
+
+    function rowTicker(e) { const el = e.target.closest('[data-ticker]'); return el?.dataset.ticker; }
+    document.getElementById('holdingsBody').addEventListener('click', e => { const t = rowTicker(e); if (t) showTickerChart(t); });
+    document.getElementById('holdingsBody').addEventListener('keydown', e => { if (e.key === 'Enter') { const t = rowTicker(e); if (t) showTickerChart(t); } });
+    document.getElementById('composition').addEventListener('click', e => { const t = rowTicker(e); if (t) showTickerChart(t); });
+
+    // ---------- Modals ----------
+
+    let lastFocus = null;
+    function openModal(id) { lastFocus = document.activeElement; document.getElementById(id).classList.add('active'); }
+    function closeModals() {
+      document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
+      if (charts.modalChart) { charts.modalChart.destroy(); delete charts.modalChart; }
+      if (lastFocus) lastFocus.focus();
+    }
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', e => { if (e.target === overlay || e.target.closest('[data-close]')) closeModals(); });
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModals(); });
+
+    function openCashModal() {
+      if (!portfolioData) return;
+      const iol = portfolioData.source === 'iol';
+      document.getElementById('cashLocalFields').hidden = iol;
+      document.getElementById('cashSub').textContent = iol
+        ? 'El disponible en IOL se lee solo. Acá cargás lo que tenés en cripto.'
+        : 'Saldos que no vienen de ninguna cuenta conectada.';
+      document.getElementById('cashArsInput').value = portfolioData.cash.ars || 0;
+      document.getElementById('cashUsdInput').value = portfolioData.cash.usd || 0;
+      document.getElementById('virtualArsInput').value = portfolioData.virtual?.ars || 0;
+      document.getElementById('virtualUsdInput').value = portfolioData.virtual?.usd || 0;
+      document.getElementById('cryptoUsdtInput').value = portfolioData.crypto?.usdt || 0;
+      document.getElementById('cashError').textContent = '';
+      openModal('cashModalOverlay');
+      document.getElementById(iol ? 'cryptoUsdtInput' : 'cashArsInput').focus();
+    }
+    document.getElementById('editCash').addEventListener('click', openCashModal);
+
+    document.getElementById('cashForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const num = id => parseFloat(document.getElementById(id).value) || 0;
+      const body = { usdt: num('cryptoUsdtInput') };
+      if (portfolioData.source !== 'iol') Object.assign(body, { ars: num('cashArsInput'), usd: num('cashUsdInput'), virtualArs: num('virtualArsInput'), virtualUsd: num('virtualUsdInput') });
+      try {
+        const res = await fetch('api/cash', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'No se pudo guardar');
+        closeModals();
+        await init();
+      } catch (err) {
+        document.getElementById('cashError').textContent = err.message;
+      }
+    });
+
+    // ---------- Controls ----------
+
+    function syncSegments() {
+      document.querySelectorAll('#currencySeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.currency === currentCurrency)));
+      document.querySelectorAll('#rangeSeg button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.range) === timeRangeDays)));
+    }
+    document.getElementById('currencySeg').addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      currentCurrency = b.dataset.currency;
+      writePref('preferredCurrency', currentCurrency);
+      syncSegments();
+      renderAll();
+    });
+    document.getElementById('rangeSeg').addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      timeRangeDays = Number(b.dataset.range);
+      writePref('fin.invRange', String(timeRangeDays));
+      syncSegments();
+      renderDelta();
+      if (historyData) renderLineChart(historyData);
+      loadAdvanced();
+    });
+
+    function renderAll() {
+      if (!portfolioData) return;
+      updateHeader(portfolioData);
+      updateCards(portfolioData);
+      renderTable(portfolioData);
+      if (historyData) renderLineChart(historyData);
+    }
+    Fin.theme.onChange(() => { Fin.chartDefaults(); renderAll(); loadAdvanced(); });
+
+    async function init() {
+      const main = document.getElementById('main');
+      main.classList.add('is-loading');
+      try {
+        [portfolioData, historyData] = await Promise.all([
+          fetch('api/portfolio').then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+          fetch('api/history').then(r => r.json())
+        ]);
+        dollarRates = portfolioData.dollarRates;
+        document.getElementById('notice').hidden = true;
+        renderAll();
+        loadAdvanced();
+      } catch (err) {
+        showError(err);
+      } finally {
+        main.classList.remove('is-loading');
+      }
+    }
+
+    Fin.hydrate();
+    Fin.chartDefaults();
+    Fin.markNav('inversiones');
+    Fin.rosette(document.getElementById('rosette'));
+    syncSegments();
+    init();
+    setInterval(init, 5 * 60 * 1000);
+    if (location.hash === '#saldos') setTimeout(() => document.getElementById('saldos').scrollIntoView({ block: 'center' }), 600);
+  </script>
+</body>
+</html>

@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Finanzas</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2312201B'/%3E%3Ccircle cx='16' cy='16' r='8.5' fill='none' stroke='%23F1F4F2' stroke-width='2.2' stroke-dasharray='2.3 1.7'/%3E%3C/svg%3E">
+  <script>
+    // Served under a path prefix (/finanzas, /myfinances): relative URLs need the trailing slash.
+    if (!location.pathname.endsWith('/') && !location.pathname.endsWith('.html')) location.replace(location.pathname + '/' + location.search + location.hash);
+    try { var t = localStorage.getItem('fin.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@300..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="app.css?v=3">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-sankey@0.12.1/dist/chartjs-chart-sankey.min.js"></script>
+  <script src="app.js?v=3"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="./#resumen"><svg data-mark></svg>Finanzas</a>
+      <nav class="nav" aria-label="Secciones">
+        <a href="./#resumen" data-nav="resumen">Resumen</a>
+        <a href="./#movimientos" data-nav="movimientos">Movimientos</a>
+        <a href="inversiones.html" data-nav="inversiones">Inversiones</a>
+        <a href="./#config" data-nav="config">Configuración</a>
+      </nav>
+      <div class="topbar-end">
+        <span class="fx-chip" id="fxNote"></span>
+        <form method="post" action="logout"><button class="btn small" type="submit">Salir</button></form>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabbar" aria-label="Secciones">
+    <a href="./#resumen" data-nav="resumen" data-icon="resumen">Resumen</a>
+    <a href="./#movimientos" data-nav="movimientos" data-icon="movimientos">Movimientos</a>
+    <a href="inversiones.html" data-nav="inversiones" data-icon="inversiones">Inversiones</a>
+    <a href="./#config" data-nav="config" data-icon="config">Ajustes</a>
+  </nav>
+
+  <div class="shell">
+  <main class="page" id="main">
+    <div class="notice" id="notice" role="alert" hidden></div>
+
+    <!-- Resumen -->
+    <section class="view" id="view-resumen" aria-labelledby="heroLabel">
+      <div class="hero">
+        <svg class="rosette" id="rosette"></svg>
+        <div class="hero-top">
+          <h1 class="hero-label" id="heroLabel">Patrimonio <time id="heroDate"></time></h1>
+          <div class="toolbar">
+            <div class="seg js-currency" role="group" aria-label="Moneda">
+              <button type="button" data-currency="ARS">Pesos</button>
+              <button type="button" data-currency="USD">Dólares MEP</button>
+            </div>
+            <div class="seg" id="periodSeg" role="group" aria-label="Período">
+              <button type="button" data-period="month">Mes</button>
+              <button type="button" data-period="3">3M</button>
+              <button type="button" data-period="6">6M</button>
+              <button type="button" data-period="12">12M</button>
+              <button type="button" data-period="all">Todo</button>
+            </div>
+          </div>
+        </div>
+        <p class="hero-figure refetch" id="heroFigure">—</p>
+        <p class="hero-twin" id="heroTwin"></p>
+        <p class="hero-delta" id="heroDelta"></p>
+        <div class="hero-chart refetch"><canvas id="nwChart" role="img" aria-label="Evolución del patrimonio en el período"></canvas></div>
+      </div>
+
+      <section class="kpis refetch" aria-label="Ingresos y gastos del período">
+        <div class="kpi">
+          <div class="kpi-label"><span class="swatch" style="--c: var(--aqua)"></span>Ingresos</div>
+          <div class="kpi-value" id="kpiIncome">—</div>
+          <div class="kpi-sub" id="kpiIncomeSub"></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label"><span class="swatch" style="--c: var(--orange)"></span>Gastos</div>
+          <div class="kpi-value" id="kpiExpense">—</div>
+          <div class="kpi-sub" id="kpiExpenseSub"></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label"><span class="swatch" style="--c: var(--blue)"></span>Ahorro</div>
+          <div class="kpi-value" id="kpiNet">—</div>
+          <div class="kpi-sub" id="kpiNetSub"></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Tasa de ahorro</div>
+          <div class="kpi-value" id="kpiRate">—</div>
+          <div class="kpi-sub" id="kpiRateSub"></div>
+        </div>
+      </section>
+
+      <p class="coverage" id="coverage" hidden><span data-icon="alert"></span><span></span></p>
+
+      <div class="grid summary">
+        <section class="panel refetch area-flow" aria-labelledby="sankeyTitle">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title" id="sankeyTitle">A dónde va la plata</h2>
+              <p class="panel-sub" id="sankeyHint"></p>
+            </div>
+          </div>
+          <div class="chart" id="sankeyWrap"><canvas id="sankeyChart" role="img" aria-label="Flujo de los ingresos del período hacia gastos por categoría y ahorro"></canvas></div>
+        </section>
+        <section class="panel refetch area-cats" aria-labelledby="catTitle">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title" id="catTitle">Gastos por categoría</h2>
+              <p class="panel-sub">Tocá una categoría para ver sus movimientos</p>
+            </div>
+          </div>
+          <ul class="bars" id="catList"></ul>
+        </section>
+        <section class="panel area-accounts" aria-labelledby="accountsTitle">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title" id="accountsTitle">Cuentas</h2>
+              <p class="panel-sub" id="accountsSub"></p>
+            </div>
+          </div>
+          <ul class="ledger" id="accounts"></ul>
+        </section>
+        <section class="panel refetch area-months" aria-labelledby="flowTitle">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title" id="flowTitle">Ingresos y gastos por mes</h2>
+              <div class="legend" style="margin-top: 6px"><span><i class="key" style="--c: var(--aqua)"></i>Ingresos</span><span><i class="key" style="--c: var(--orange)"></i>Gastos</span></div>
+            </div>
+            <button type="button" class="btn small" id="flowTableToggle" aria-pressed="false">Ver tabla</button>
+          </div>
+          <div class="chart" id="flowChartWrap"><canvas id="flowChart" role="img" aria-label="Ingresos y gastos de cada mes"></canvas></div>
+          <div class="table-wrap" id="flowTable" hidden></div>
+        </section>
+      </div>
+      <p class="foot-note">Las transferencias entre tus cuentas y las operaciones rechazadas no cuentan como ingreso ni gasto. Los gastos de la obra salen de su planilla, y los pagos que también aparecen en MercadoPago se cuentan una sola vez.</p>
+    </section>
+
+    <!-- Movimientos -->
+    <section class="view" id="view-movimientos" aria-labelledby="txTitle">
+      <div class="page-head">
+        <div>
+          <h1 class="page-title" id="txTitle">Movimientos</h1>
+          <p class="page-sub" id="txCount"></p>
+        </div>
+        <div class="seg js-currency" role="group" aria-label="Moneda de la conversión">
+          <button type="button" data-currency="ARS">En pesos</button>
+          <button type="button" data-currency="USD">En dólares</button>
+        </div>
+      </div>
+      <div class="filters">
+        <label class="search"><span class="sr-only">Buscar</span><span data-icon="search"></span><input class="input" type="search" id="fQ" placeholder="Buscar por descripción o contraparte"></label>
+        <label><span class="sr-only">Desde</span><input class="input" type="date" id="fFrom" title="Desde"></label>
+        <label><span class="sr-only">Hasta</span><input class="input" type="date" id="fTo" title="Hasta"></label>
+        <select class="select" id="fAccount" aria-label="Cuenta"><option value="">Todas las cuentas</option></select>
+        <select class="select" id="fKind" aria-label="Tipo">
+          <option value="">Todos los tipos</option>
+          <option value="expense">Gastos</option>
+          <option value="income">Ingresos</option>
+          <option value="transfer">Transferencias</option>
+          <option value="ignored">Ignorados</option>
+        </select>
+        <select class="select" id="fCategory" aria-label="Categoría"><option value="">Todas las categorías</option></select>
+      </div>
+      <div class="filters-foot">
+        <span id="filterSummary"></span>
+        <button type="button" class="link" id="clearFilters" hidden>Limpiar filtros</button>
+      </div>
+      <section class="panel">
+        <div class="table-wrap">
+          <table class="tx-table">
+            <thead>
+              <tr><th>Descripción</th><th class="hide-sm">Categoría</th><th class="hide-sm">Cuenta</th><th class="num">Monto</th><th class="num hide-sm" id="convHead">En pesos</th></tr>
+            </thead>
+            <tbody id="txBody"></tbody>
+          </table>
+        </div>
+        <div class="table-foot"><button type="button" class="btn" id="txMore" hidden>Cargar más</button></div>
+      </section>
+    </section>
+
+    <!-- Configuración -->
+    <section class="view" id="view-config" aria-labelledby="cfgTitle">
+      <div class="page-head"><h1 class="page-title" id="cfgTitle">Configuración</h1></div>
+      <div class="settings">
+        <section class="panel" aria-labelledby="iolTitle">
+          <div>
+            <h2 id="iolTitle">Conexión con IOL</h2>
+            <p class="lede">Con tu usuario y contraseña de InvertirOnline la app lee tu cartera real y actualiza el saldo de IOL sola. Antes de guardar, prueba que IOL los acepte.</p>
+          </div>
+          <div class="form">
+            <div class="status" id="iolStatusBox"><span data-icon="clock" id="iolIcon"></span><span id="iolStatus">Cargando…</span></div>
+            <form class="form" id="iolForm" autocomplete="off">
+              <label class="field"><span>Usuario de IOL</span><input class="input" id="iolUser" autocomplete="off" autocapitalize="none" spellcheck="false" required></label>
+              <label class="field"><span>Contraseña de IOL</span><input class="input" id="iolPass" type="password" autocomplete="new-password" placeholder="Dejala vacía para mantener la actual"></label>
+              <div class="error" id="iolError" role="alert"></div>
+              <div class="ok" id="iolOk" role="status"></div>
+              <div class="actions">
+                <button type="button" class="btn" id="iolTest">Probar conexión actual</button>
+                <button type="submit" class="btn primary" id="iolSave">Guardar</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="obraTitle">
+          <div>
+            <h2 id="obraTitle">Planilla de la obra</h2>
+            <p class="lede">Los gastos de la obra se leen de la planilla de Google cada 30 minutos. Si un pago también aparece en MercadoPago, se cuenta una sola vez.</p>
+          </div>
+          <div class="form">
+            <div class="status" id="obraStatusBox"><span data-icon="clock"></span><span id="obraStatus">Cargando…</span></div>
+            <dl class="facts" id="obraFacts" hidden></dl>
+            <div class="error" id="obraError" role="alert"></div>
+            <div class="actions">
+              <a class="btn" href="./#movimientos" id="obraSee">Ver gastos de la obra</a>
+              <button type="button" class="btn primary" id="obraSync">Sincronizar ahora</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="themeTitle">
+          <div>
+            <h2 id="themeTitle">Apariencia</h2>
+            <p class="lede">Automático sigue la configuración de tu teléfono o computadora.</p>
+          </div>
+          <div>
+            <div class="seg" id="themeSeg" role="group" aria-label="Tema">
+              <button type="button" data-theme-pref="auto">Automático</button>
+              <button type="button" data-theme-pref="light">Claro</button>
+              <button type="button" data-theme-pref="dark">Oscuro</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="botTitle">
+          <div>
+            <h2 id="botTitle">Bot de Grok</h2>
+            <p class="lede">Tu agente carga movimientos y saldos por la API con su token. No necesita esta contraseña.</p>
+          </div>
+          <div class="form">
+            <p id="botActivity">Cargando…</p>
+            <p><a class="link" href="api/v1/guide" target="_blank" rel="noopener">Guía para el bot</a> <span class="muted">y</span> <a class="link" href="api/v1/openapi.json" target="_blank" rel="noopener">especificación OpenAPI</a></p>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="sessionTitle">
+          <div>
+            <h2 id="sessionTitle">Sesión</h2>
+            <p class="lede">La sesión dura 30 días en este dispositivo.</p>
+          </div>
+          <form method="post" action="logout"><button class="btn" type="submit">Cerrar sesión</button></form>
+        </section>
+      </div>
+    </section>
+  </main>
+  </div>
+
+  <div class="modal-overlay" id="txModal" role="dialog" aria-modal="true" aria-labelledby="txModalTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h2 id="txModalTitle">Editar movimiento</h2>
+          <p class="sub" id="txModalSub"></p>
+        </div>
+        <button type="button" class="icon-btn" data-close aria-label="Cerrar" data-icon="close"></button>
+      </div>
+      <form class="form" id="txForm">
+        <label class="field"><span>Categoría</span><input class="input" id="txCategory" list="categoryList" required></label>
+        <datalist id="categoryList"></datalist>
+        <label class="field"><span>Tipo</span>
+          <select class="select" id="txKind">
+            <option value="expense">Gasto</option>
+            <option value="income">Ingreso</option>
+            <option value="transfer">Transferencia entre cuentas propias</option>
+            <option value="ignored">Ignorar (rechazado o cancelado)</option>
+          </select>
+        </label>
+        <label class="field"><span>Nota</span><input class="input" id="txNote"></label>
+        <div class="error" id="txError" role="alert"></div>
+        <div class="actions">
+          <button type="button" class="btn" data-close>Cancelar</button>
+          <button type="submit" class="btn primary">Guardar cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="balModal" role="dialog" aria-modal="true" aria-labelledby="balModalTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h2 id="balModalTitle">Actualizar saldo</h2>
+          <p class="sub" id="balModalSub"></p>
+        </div>
+        <button type="button" class="icon-btn" data-close aria-label="Cerrar" data-icon="close"></button>
+      </div>
+      <form class="form" id="balForm">
+        <label class="field"><span>Saldo actual</span><input class="input" id="balAmount" type="number" step="0.01" required inputmode="decimal"></label>
+        <label class="field"><span>Fecha</span><input class="input" id="balDate" type="date" required></label>
+        <div class="error" id="balError" role="alert"></div>
+        <div class="actions">
+          <button type="button" class="btn" data-close>Cancelar</button>
+          <button type="submit" class="btn primary">Guardar saldo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const API = 'api/finance';
+    const INSTITUTIONS = { iol: 'IOL', wallbit: 'Wallbit', mercadopago: 'MercadoPago', 'personal-pay': 'Personal Pay', cripto: 'Cripto', otro: 'Otros', efectivo: 'Efectivo', obra: 'Obra' };
+    const KIND_LABEL = { income: 'Ingreso', expense: 'Gasto', transfer: 'Transferencia', ignored: 'Ignorado' };
+    const PERIOD_TEXT = { month: 'este mes', 3: 'en los últimos 3 meses', 6: 'en los últimos 6 meses', 12: 'en los últimos 12 meses', all: 'desde el primer registro' };
+    const { money, pct, number } = Fin;
+
+    const state = {
+      currency: readPref('fin.currency', 'ARS'),
+      period: readPref('fin.period', '6'),
+      accounts: [],
+      history: [],
+      audit: [],
+      fx: null,
+      flow: null,
+      charts: {},
+      tx: { rows: [], total: 0 },
+      editing: null,
+      balanceAccount: null,
+      flowTable: false
+    };
+
+    function readPref(key, fallback) {
+      try { return localStorage.getItem(key) || fallback; } catch (e) { return fallback; }
+    }
+    function writePref(key, value) {
+      try { localStorage.setItem(key, value); } catch (e) { /* storage unavailable */ }
+    }
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmt = (value, currency = state.currency, opts) => money(value, currency, opts);
+    const share = p => p > 0 && p < 1 ? '<1 %' : `${Math.round(p)} %`;
+    const pctShare = share;
+    const when = iso => iso ? new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' }) : '';
+    const pick = (obj, base) => state.currency === 'ARS' ? obj[`${base}_ars`] ?? obj.ars : obj[`${base}_usd`] ?? obj.usd;
+    const other = () => state.currency === 'ARS' ? 'USD' : 'ARS';
+
+    async function api(path, options) {
+      const res = await fetch(`${API}${path}`, options);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.errors?.join('; ') || body.error || `HTTP ${res.status}`);
+      return body;
+    }
+
+    function periodRange() {
+      const today = Fin.todayAr();
+      if (state.period === 'all') return { from: undefined, to: today };
+      const [y, m] = today.split('-').map(Number);
+      const months = state.period === 'month' ? 1 : Number(state.period);
+      const start = new Date(Date.UTC(y, m - months, 1)).toISOString().slice(0, 10);
+      return { from: start, to: today };
+    }
+
+    // Every month of the selected period, including the ones without movements.
+    function filledMonths(flowMonths, range) {
+      const byMonth = Object.fromEntries(flowMonths.map(m => [m.month, m]));
+      const first = range.from ? range.from.slice(0, 7) : flowMonths[0]?.month;
+      if (!first) return [];
+      const last = range.to.slice(0, 7);
+      const out = [];
+      let [y, m] = first.split('-').map(Number);
+      while (`${y}-${String(m).padStart(2, '0')}` <= last) {
+        const key = `${y}-${String(m).padStart(2, '0')}`;
+        out.push(byMonth[key] || { month: key, income_ars: 0, income_usd: 0, expense_ars: 0, expense_usd: 0, count: 0 });
+        m++;
+        if (m > 12) { m = 1; y++; }
+      }
+      return out;
+    }
+
+    function showError(error) {
+      console.error(error);
+      const box = document.getElementById('notice');
+      box.textContent = `No se pudieron cargar los datos: ${error.message}. Recargá la página para reintentar.`;
+      box.hidden = false;
+    }
+
+    function drawChart(id, config) {
+      if (state.charts[id]) state.charts[id].destroy();
+      state.charts[id] = new Chart(document.getElementById(id), config);
+    }
+
+    // ---------- Resumen ----------
+
+    async function loadResumen() {
+      const main = document.getElementById('main');
+      main.classList.add('is-loading');
+      try {
+        const range = periodRange();
+        const qs = new URLSearchParams({ to: range.to, ...(range.from ? { from: range.from } : {}) });
+        const [accounts, flow, history, audit, fx] = await Promise.all([
+          api('/accounts'),
+          api(`/cashflow?${qs}`),
+          api('/net-worth/history'),
+          api('/audit?limit=200'),
+          api('/fx').catch(() => ({ fx: null }))
+        ]);
+        state.accounts = accounts.accounts;
+        state.flow = flow;
+        state.history = history.points;
+        state.audit = audit.entries;
+        state.fx = fx.fx;
+        document.getElementById('notice').hidden = true;
+        renderResumen();
+        renderFx();
+        renderBotActivity();
+      } finally {
+        main.classList.remove('is-loading');
+      }
+    }
+
+    function renderResumen() {
+      if (!state.flow) return;
+      const range = periodRange();
+      const monthList = filledMonths(state.flow.months, range);
+      renderHero(range);
+      renderKpis(monthList);
+      renderNwChart(state.history.filter(p => !range.from || p.date >= range.from));
+      renderSankey(state.flow.categories);
+      renderAccounts();
+      renderFlow(monthList);
+      renderCategories(state.flow.categories.filter(c => c.kind === 'expense'));
+    }
+
+    function renderHero(range) {
+      const last = state.history[state.history.length - 1];
+      const key = state.currency === 'ARS' ? 'ars' : 'usd';
+      const otherKey = key === 'ars' ? 'usd' : 'ars';
+      Fin.figure(document.getElementById('heroFigure'), last ? last[key] : null, state.currency);
+      document.getElementById('heroDate').textContent = last ? `al ${Fin.shortDate(last.date)}` : '';
+      const twin = document.getElementById('heroTwin');
+      twin.textContent = last ? fmt(last[otherKey], other()) : '';
+      if (state.fx?.mep) {
+        const rate = document.createElement('span');
+        rate.className = 'muted';
+        rate.textContent = `con el dólar MEP a ${money(state.fx.mep, 'ARS', { decimals: 2 })}`;
+        twin.append(rate);
+      }
+      const delta = document.getElementById('heroDelta');
+      delta.textContent = '';
+      const inRange = state.history.filter(p => !range.from || p.date >= range.from);
+      const start = state.history.filter(p => range.from && p.date < range.from).pop() || inRange[0];
+      if (!start || !last || start === last) return;
+      const diff = last[key] - start[key];
+      const rel = start[key] ? (diff / start[key]) * 100 : 0;
+      const d = document.createElement('span');
+      d.className = `delta ${diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat'}`;
+      d.textContent = `${diff > 0 ? '▲' : diff < 0 ? '▼' : '■'} ${fmt(Math.abs(diff))} (${pct(rel)})`;
+      const label = document.createElement('span');
+      label.className = 'muted';
+      label.textContent = state.period === 'all' ? `desde el ${Fin.shortDate(start.date, { year: true })}` : PERIOD_TEXT[state.period];
+      delta.append(d, label);
+    }
+
+    function renderKpis(monthList) {
+      const t = state.flow.totals;
+      const income = pick(t, 'income');
+      const expense = pick(t, 'expense');
+      const net = income - expense;
+      const months = monthList.length || 1;
+      const count = monthList.reduce((n, m) => n + m.count, 0);
+      document.getElementById('kpiIncome').textContent = fmt(income);
+      document.getElementById('kpiExpense').textContent = fmt(expense);
+      document.getElementById('kpiNet').textContent = fmt(net, state.currency, { sign: true });
+      document.getElementById('kpiIncomeSub').textContent = months > 1 ? `${fmt(income / months)} por mes` : `${count} movimientos`;
+      document.getElementById('kpiExpenseSub').textContent = months > 1 ? `${fmt(expense / months)} por mes` : PERIOD_TEXT[state.period];
+      document.getElementById('kpiNetSub').textContent = net >= 0 ? 'lo que te quedó' : 'gastaste más de lo que entró';
+      const rate = income > 0 ? (net / income) * 100 : null;
+      const meaningful = rate != null && rate >= -100;
+      document.getElementById('kpiRate').textContent = meaningful ? pct(rate, { sign: false, decimals: 0 }) : '—';
+      document.getElementById('kpiRateSub').textContent = income <= 0 ? 'sin ingresos en el período'
+        : meaningful ? 'de lo que ingresó' : `gastaste ${number(expense / income, 0)} veces lo que entró`;
+      renderCoverage(monthList);
+    }
+
+    // Expenses can arrive (e.g. from the construction sheet) before the bank movements that
+    // carry the income: say so instead of letting the savings figures look real.
+    function renderCoverage(monthList) {
+      const note = document.getElementById('coverage');
+      const lastIncome = monthList.map(m => pick(m, 'income') > 0).lastIndexOf(true);
+      const gap = monthList.slice(lastIncome + 1).filter(m => pick(m, 'expense') > 0);
+      if (!gap.length || lastIncome === -1 && monthList.length === 1) { note.hidden = true; return; }
+      const since = lastIncome === -1 ? gap[0].month : monthList[lastIncome + 1].month;
+      const [y, m] = since.split('-').map(Number);
+      note.querySelector('span:last-child').textContent = `No hay ingresos cargados desde ${Fin.MONTHS_LONG[m - 1]} de ${y}: el ahorro de esos meses no es real. Se completa cuando el bot cargue los movimientos de tus cuentas.`;
+      note.hidden = false;
+    }
+
+    function renderNwChart(points) {
+      const t = Fin.tokens();
+      const key = state.currency === 'ARS' ? 'ars' : 'usd';
+      const dates = points.map(p => p.date);
+      const narrow = window.innerWidth < 640;
+      drawChart('nwChart', {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: [{
+            label: 'Patrimonio', data: points.map(p => p[key]), borderColor: t.blue, borderWidth: 2, borderJoinStyle: 'round', borderCapStyle: 'round',
+            backgroundColor: Fin.lineGradient(t['blue-wash']), fill: true, pointRadius: 0, pointHoverRadius: 5,
+            pointHoverBackgroundColor: t.blue, pointHoverBorderColor: t.paper, pointHoverBorderWidth: 2, tension: 0.2
+          }]
+        },
+        options: {
+          interaction: { mode: 'index', intersect: false },
+          layout: { padding: { top: 4 } },
+          scales: {
+            x: { grid: { display: false }, border: { color: t['rule-strong'] }, ticks: { autoSkip: false, maxRotation: 0, callback: Fin.monthTicks(dates, narrow ? 4 : 8), color: t['ink-3'] } },
+            y: { position: 'right', grid: { color: t.rule }, border: { display: false }, ticks: { maxTicksLimit: 5, color: t['ink-3'], callback: v => fmt(v, state.currency, { compact: true }) } }
+          },
+          plugins: {
+            tooltip: {
+              displayColors: false,
+              callbacks: { title: items => Fin.longDay(items[0].label), label: ctx => fmt(ctx.parsed.y) }
+            }
+          }
+        },
+        plugins: [Fin.crosshair]
+      });
+    }
+
+    // Income → "Ingresos" → top expense categories + savings (or a deficit source).
+    function renderSankey(categories) {
+      const t = Fin.tokens();
+      const val = c => state.currency === 'ARS' ? c.ars : c.usd;
+      const incomes = categories.filter(c => c.kind === 'income' && val(c) > 0).sort((a, b) => val(b) - val(a));
+      const expenses = categories.filter(c => c.kind === 'expense' && val(c) > 0).sort((a, b) => val(b) - val(a));
+      const totalIn = incomes.reduce((s, c) => s + val(c), 0);
+      const totalOut = expenses.reduce((s, c) => s + val(c), 0);
+      const deficit = totalOut - totalIn;
+      const hub = deficit > 0 ? 'Total gastado' : 'Ingresos';
+      const flows = [];
+      const colors = { [hub]: t['ink-3'] };
+      const minShare = Math.max(totalIn, totalOut) * 0.02;
+      const wrap = document.getElementById('sankeyWrap');
+      const narrow = wrap.clientWidth < 600;
+
+      // The income column adds information with 2+ meaningful sources, or when savings had to
+      // cover a deficit (then it shows how much came from income and how much from savings).
+      const bigIn = incomes.filter(c => val(c) >= minShare);
+      const smallIn = incomes.filter(c => val(c) < minShare);
+      if ((bigIn.length > 1 && !narrow) || deficit > 0) {
+        const nodes = bigIn.map(c => ({ name: c.category, value: val(c) }));
+        const smallSum = smallIn.reduce((s, c) => s + val(c), 0);
+        // Sources too small to see fold into the main one instead of stacking unreadable labels.
+        if (smallSum >= minShare || !nodes.length) nodes.push({ name: smallIn.length === 1 ? smallIn[0].category : `Otros ingresos (${smallIn.length})`, value: smallSum });
+        else if (smallSum > 0) nodes[0].value += smallSum;
+        for (const n of nodes) if (n.value > 0) { flows.push({ from: `${n.name} `, to: hub, flow: n.value }); colors[`${n.name} `] = t.aqua; }
+      }
+      const deficitKey = 'De tus ahorros';
+      if (deficit > 0) { flows.push({ from: deficitKey, to: hub, flow: deficit }); colors[deficitKey] = t.bad; }
+
+      const top = expenses.slice(0, 8).filter(c => val(c) >= minShare);
+      const rest = expenses.slice(top.length);
+      for (const c of top) { flows.push({ from: hub, to: c.category, flow: val(c) }); colors[c.category] = t.orange; }
+      if (rest.length) { const k = `Otros gastos (${rest.length})`; flows.push({ from: hub, to: k, flow: rest.reduce((s, c) => s + val(c), 0) }); colors[k] = t.orange; }
+      const saved = totalIn - totalOut;
+      if (saved > 0) { flows.push({ from: hub, to: 'Ahorro', flow: saved }); colors.Ahorro = t.blue; }
+
+      const hint = document.getElementById('sankeyHint');
+      if (!flows.length) {
+        if (state.charts.sankeyChart) { state.charts.sankeyChart.destroy(); delete state.charts.sankeyChart; }
+        wrap.style.height = '';
+        wrap.innerHTML = '<p class="empty">No hay ingresos ni gastos en este período.</p><canvas id="sankeyChart" hidden></canvas>';
+        hint.textContent = '';
+        return;
+      }
+      if (!wrap.querySelector('canvas:not([hidden])')) wrap.innerHTML = '<canvas id="sankeyChart" role="img" aria-label="Flujo de los ingresos del período hacia gastos por categoría y ahorro"></canvas>';
+      hint.textContent = saved >= 0
+        ? `De cada $ 100 que entraron, ahorraste $ ${Math.round((saved / totalIn) * 100)}`
+        : `Gastaste ${fmt(-saved)} más de lo que entró`;
+      const rightNodes = flows.filter(f => f.from === hub).length;
+      wrap.style.height = `${Math.min(460, Math.max(240, rightNodes * 44 + 24))}px`;
+      const nodeTotals = {};
+      for (const f of flows) { nodeTotals[f.from] = (nodeTotals[f.from] || 0) + f.flow; if (f.to !== hub) nodeTotals[f.to] = (nodeTotals[f.to] || 0) + f.flow; }
+      nodeTotals[hub] = Math.max(totalIn, totalOut);
+      const labels = Object.fromEntries(Object.keys(nodeTotals).map(k => [k, `${k.trim()}  ${fmt(nodeTotals[k], state.currency, { compact: true })}`]));
+      drawChart('sankeyChart', {
+        type: 'sankey',
+        data: {
+          datasets: [{
+            data: flows, labels,
+            colorFrom: c => colors[c.dataset.data[c.dataIndex].from],
+            colorTo: c => colors[c.dataset.data[c.dataIndex].to],
+            colorMode: 'gradient', alpha: 0.4, borderWidth: 0, nodeWidth: 8, nodePadding: 16,
+            color: t.ink, font: { size: narrow ? 11 : 12, family: "'Chivo', system-ui, sans-serif" },
+            priority: Object.fromEntries(Object.keys(nodeTotals).map(k => [k, -nodeTotals[k]])), size: 'max'
+          }]
+        },
+        options: {
+          layout: { padding: { top: 6, right: 2, bottom: 10 } },
+          plugins: {
+            tooltip: {
+              displayColors: false,
+              callbacks: {
+                title: () => '',
+                label: ctx => {
+                  const d = ctx.raw;
+                  const base = d.from === hub ? Math.max(totalIn, totalOut) : null;
+                  return `${d.from.trim()} → ${d.to}: ${fmt(d.flow)}${base ? ` (${Math.round((d.flow / base) * 100)} %)` : ''}`;
+                }
+              }
+            }
+          },
+          onClick: (evt, elements) => {
+            const d = elements[0] && state.charts.sankeyChart.data.datasets[0].data[elements[0].index];
+            if (!d || d.from !== hub || d.to === 'Ahorro' || d.to.startsWith('Otros gastos')) return;
+            const range = periodRange();
+            openMovimientos({ category: d.to, kind: 'expense', from: range.from || '', to: range.to });
+          },
+          onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
+        }
+      });
+    }
+
+    // Seeded names carry implementation notes, e.g. "Virtual ARS (portfolio.json)".
+    const displayName = a => a.name.replace(/\s*\((portfolio\.json|inversiones \+ saldo)\)\s*$/i, '').trim() || a.name;
+
+    function freshness(a) {
+      if (a.auto_source) return `<span class="badge good">${Fin.icon('sync')}Automático</span>`;
+      if (a.stale_days == null) return `<span class="badge serious">${Fin.icon('alert')}Sin saldo</span>`;
+      if (a.stale_days > 14) return `<span class="badge serious">${Fin.icon('alert')}${esc(Fin.relDays(a.stale_days))}</span>`;
+      if (a.stale_days > 7) return `<span class="badge warning">${Fin.icon('clock')}${esc(Fin.relDays(a.stale_days))}</span>`;
+      return `<span class="badge">${esc(Fin.relDays(a.stale_days))}</span>`;
+    }
+
+    function renderAccounts() {
+      const value = a => (state.currency === 'ARS' ? a.balance?.ars : a.balance?.usd) || 0;
+      // Accounts that only carry an expense sheet's movements hold no money: not listed here.
+      const rows = state.accounts.filter(a => a.auto_source !== 'obra-sheet').sort((a, b) => (b.balance ? 1 : 0) - (a.balance ? 1 : 0) || value(b) - value(a));
+      const total = rows.reduce((s, a) => s + Math.max(0, value(a)), 0) || 1;
+      const missing = rows.filter(a => !a.balance).length;
+      document.getElementById('accountsSub').textContent = missing
+        ? `${missing} ${missing === 1 ? 'cuenta' : 'cuentas'} sin saldo cargado`
+        : 'Todas las cuentas tienen saldo';
+      document.getElementById('accounts').innerHTML = rows.map(a => {
+        const b = a.balance;
+        const inst = INSTITUTIONS[a.institution] || a.institution;
+        const name = displayName(a);
+        const showInst = !name.toLowerCase().startsWith(inst.toLowerCase()) && a.institution !== 'otro';
+        const action = a.auto_source === 'iol-portfolio' ? ''
+          : a.auto_source === 'portfolio-extras' ? '<a class="link" href="inversiones.html#saldos">Editar en Inversiones</a>'
+          : `<button type="button" class="link" data-balance="${esc(a.id)}">${b ? 'Actualizar' : 'Cargar saldo'}</button>`;
+        const meta = `<div class="meta">${showInst ? `<span>${esc(inst)}</span>` : ''}${freshness(a)}${action}</div>`;
+        if (!b) {
+          return `<li class="dim"><div><div class="name">${esc(name)}</div>${meta}</div><div class="amount muted">—</div></li>`;
+        }
+        const share = Math.max(0, value(a)) / total * 100;
+        const conv = a.currency === state.currency || (state.currency === 'USD' && a.currency === 'USDT') ? '' : fmt(state.currency === 'ARS' ? b.ars : b.usd);
+        const meter = share >= 0.5 ? `<div class="meter"><div class="track"><div class="fill" style="width:${share.toFixed(1)}%"></div></div><span class="pct">${pctShare(share)}</span></div>` : '';
+        return `<li>
+          <div><div class="name">${esc(name)}</div>${meta}</div>
+          <div><div class="amount">${fmt(b.amount, a.currency)}</div><div class="conv">${conv ? `≈ ${conv}` : ''}</div></div>
+          ${meter}
+        </li>`;
+      }).join('');
+    }
+
+    function renderFlow(months) {
+      const t = Fin.tokens();
+      const bar = (label, key, color) => ({
+        label, data: months.map(m => pick(m, key)), backgroundColor: color, hoverBackgroundColor: color,
+        borderRadius: 4, borderSkipped: 'start', borderColor: t.sheet, borderWidth: { left: 1, right: 1 }, maxBarThickness: 24
+      });
+      drawChart('flowChart', {
+        type: 'bar',
+        data: { labels: months.map(m => Fin.monthLabel(m.month)), datasets: [bar('Ingresos', 'income', t.aqua), bar('Gastos', 'expense', t.orange)] },
+        options: {
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { grid: { display: false }, border: { color: t['rule-strong'] }, ticks: { maxRotation: 0, autoSkipPadding: 12 } },
+            y: { grid: { color: t.rule }, border: { display: false }, ticks: { maxTicksLimit: 5, callback: v => fmt(v, state.currency, { compact: true }) } }
+          },
+          plugins: { tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.parsed.y)}  ${ctx.dataset.label}` } } }
+        }
+      });
+      document.getElementById('flowTable').innerHTML = `<table>
+        <thead><tr><th>Mes</th><th class="num">Ingresos</th><th class="num">Gastos</th><th class="num">Neto</th></tr></thead>
+        <tbody>${months.slice().reverse().map(m => {
+          const net = pick(m, 'income') - pick(m, 'expense');
+          return `<tr><td>${Fin.monthLabel(m.month)}</td><td class="num">${fmt(pick(m, 'income'))}</td><td class="num">${fmt(pick(m, 'expense'))}</td><td class="num ${net > 0 ? 'amount-pos' : ''}">${fmt(net, state.currency, { sign: true })}</td></tr>`;
+        }).join('')}</tbody></table>`;
+    }
+
+    function renderCategories(categories) {
+      const val = c => state.currency === 'ARS' ? c.ars : c.usd;
+      const sorted = categories.filter(c => val(c) > 0).sort((a, b) => val(b) - val(a));
+      const total = sorted.reduce((s, c) => s + val(c), 0);
+      const list = document.getElementById('catList');
+      if (!sorted.length) { list.innerHTML = '<li class="empty">No hay gastos en este período.</li>'; return; }
+      const top = sorted.slice(0, 9);
+      const rest = sorted.slice(9);
+      const rows = top.map(c => ({ name: c.category, value: val(c), count: c.count, link: true }));
+      if (rest.length) rows.push({ name: `Otras ${rest.length} categorías`, value: rest.reduce((s, c) => s + val(c), 0), count: rest.reduce((n, c) => n + c.count, 0), link: false });
+      const max = rows[0].value || 1;
+      list.innerHTML = rows.map(r => {
+        const inner = `<span class="label">${esc(r.name)}<small>${r.count} mov.</small></span><span class="value">${fmt(r.value)}</span>
+          <span class="meter" style="--fill: var(--orange); --track: var(--orange-track)"><span class="track"><span class="fill" style="display:block;width:${(r.value / max * 100).toFixed(1)}%"></span></span><span class="pct">${share(r.value / total * 100)}</span></span>`;
+        return `<li>${r.link ? `<button type="button" class="row" data-category="${esc(r.name)}">${inner}</button>` : `<div class="row">${inner}</div>`}</li>`;
+      }).join('');
+    }
+
+    function renderFx() {
+      const fx = state.fx;
+      document.getElementById('fxNote').innerHTML = fx?.mep ? `MEP <strong>${esc(money(fx.mep, 'ARS', { decimals: 2 }))}</strong>` : '';
+    }
+
+    function renderBotActivity() {
+      const bot = state.audit.find(e => e.actor === 'bot');
+      document.getElementById('botActivity').textContent = bot
+        ? `Última carga del bot: ${new Date(bot.at).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'medium', timeStyle: 'short' })} (${bot.action}).`
+        : 'El bot todavía no cargó datos.';
+    }
+
+    // ---------- Movimientos ----------
+
+    const FILTERS = { from: 'fFrom', to: 'fTo', account_id: 'fAccount', kind: 'fKind', category: 'fCategory', q: 'fQ' };
+
+    function txFilters() {
+      const params = new URLSearchParams();
+      for (const [key, id] of Object.entries(FILTERS)) {
+        const value = document.getElementById(id).value.trim();
+        if (value) params.set(key, value);
+      }
+      return params;
+    }
+
+    async function loadTx(append = false) {
+      const params = txFilters();
+      params.set('limit', '100');
+      params.set('offset', append ? String(state.tx.rows.length) : '0');
+      const result = await api(`/transactions?${params}`);
+      state.tx.rows = append ? state.tx.rows.concat(result.transactions) : result.transactions;
+      state.tx.total = result.total;
+      renderTx();
+    }
+
+    function renderTx() {
+      document.getElementById('convHead').textContent = state.currency === 'ARS' ? 'En pesos' : 'En dólares';
+      const body = document.getElementById('txBody');
+      const active = [...txFilters().keys()].length;
+      document.getElementById('clearFilters').hidden = !active;
+      document.getElementById('filterSummary').textContent = active ? `${active} ${active === 1 ? 'filtro activo' : 'filtros activos'}` : '';
+      if (!state.tx.rows.length) {
+        body.innerHTML = `<tr><td colspan="5" class="empty">${active ? 'No hay movimientos con esos filtros.' : 'Todavía no hay movimientos cargados.'}</td></tr>`;
+      } else {
+        let lastDay = null;
+        body.innerHTML = state.tx.rows.map(t => {
+          const conv = state.currency === 'ARS' ? t.amount_ars : t.amount_usd;
+          const dim = t.kind === 'transfer' || t.kind === 'ignored';
+          const sameCurrency = t.currency === state.currency || (state.currency === 'USD' && t.currency === 'USDT');
+          const header = t.date !== lastDay ? `<tr class="tx-day"><td colspan="5">${esc(Fin.longDay(t.date))}</td></tr>` : '';
+          lastDay = t.date;
+          const chip = `<button type="button" class="chip" data-edit="${t.id}" title="Cambiar categoría">${esc(t.category || 'Sin categoría')}</button>`;
+          return `${header}<tr class="tx-row${dim ? ' tx-dim' : ''}">
+            <td><div class="tx-desc">${esc(t.description || t.counterparty)}</div>${t.counterparty && t.description ? `<div class="tx-cp">${esc(t.counterparty)}</div>` : ''}
+              <div class="tx-kind show-sm">${chip}</div></td>
+            <td class="hide-sm">${chip}<div class="tx-kind">${t.category === 'Pago de obra' ? 'Contado en la planilla de la obra' : `${KIND_LABEL[t.kind]}${t.category_source === 'manual' ? ', editado' : ''}`}</div></td>
+            <td class="hide-sm tx-acct">${esc(t.account_name)}</td>
+            <td class="num ${t.amount > 0 && !dim ? 'amount-pos' : 'amount-neg'}">${fmt(t.amount, t.currency, { sign: true })}</td>
+            <td class="num hide-sm muted">${sameCurrency ? '' : fmt(conv, state.currency, { sign: true })}</td>
+          </tr>`;
+        }).join('');
+      }
+      const shown = state.tx.rows.length;
+      document.getElementById('txCount').textContent = state.tx.total
+        ? `${Fin.number(shown)} de ${Fin.number(state.tx.total)} movimientos`
+        : '';
+      document.getElementById('txMore').hidden = shown >= state.tx.total;
+    }
+
+    async function loadFilterOptions() {
+      const [{ accounts }, { categories }] = await Promise.all([api('/accounts'), api('/categories')]);
+      const accountSel = document.getElementById('fAccount');
+      const currentAccount = accountSel.value;
+      accountSel.innerHTML = '<option value="">Todas las cuentas</option>' + accounts.map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
+      accountSel.value = currentAccount;
+      const names = [...new Set(categories.map(c => c.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+      const catSel = document.getElementById('fCategory');
+      const current = catSel.value;
+      catSel.innerHTML = '<option value="">Todas las categorías</option>' + names.map(n => `<option>${esc(n)}</option>`).join('');
+      catSel.value = current;
+      document.getElementById('categoryList').innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
+    }
+
+    function openMovimientos(filters) {
+      for (const [key, id] of Object.entries(FILTERS)) document.getElementById(id).value = filters[key] || '';
+      if (location.hash === '#movimientos') loadTx().catch(showError);
+      else location.hash = '#movimientos';
+    }
+
+    // ---------- Modals ----------
+
+    let lastFocus = null;
+    function openModal(id) {
+      lastFocus = document.activeElement;
+      document.getElementById(id).classList.add('active');
+    }
+    function closeModals() {
+      document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
+      if (lastFocus) lastFocus.focus();
+    }
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', e => { if (e.target === overlay || e.target.closest('[data-close]')) closeModals(); });
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModals(); });
+
+    document.getElementById('txBody').addEventListener('click', e => {
+      const button = e.target.closest('[data-edit]');
+      if (!button) return;
+      const tx = state.tx.rows.find(t => t.id === Number(button.dataset.edit));
+      state.editing = tx;
+      document.getElementById('txModalSub').textContent = `${Fin.shortDate(tx.date, { year: true })}, ${tx.description || tx.counterparty}, ${fmt(tx.amount, tx.currency, { sign: true })}`;
+      document.getElementById('txCategory').value = tx.category || '';
+      document.getElementById('txKind').value = tx.kind;
+      document.getElementById('txNote').value = tx.note || '';
+      document.getElementById('txError').textContent = '';
+      openModal('txModal');
+      document.getElementById('txCategory').focus();
+    });
+
+    document.getElementById('txForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      try {
+        const { transaction } = await api(`/transactions/${state.editing.id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ category: document.getElementById('txCategory').value.trim(), kind: document.getElementById('txKind').value, note: document.getElementById('txNote').value })
+        });
+        Object.assign(state.editing, transaction);
+        closeModals();
+        renderTx();
+        loadFilterOptions();
+      } catch (error) {
+        document.getElementById('txError').textContent = error.message;
+      }
+    });
+
+    document.getElementById('accounts').addEventListener('click', e => {
+      const button = e.target.closest('[data-balance]');
+      if (!button) return;
+      const account = state.accounts.find(a => a.id === button.dataset.balance);
+      state.balanceAccount = account;
+      document.getElementById('balModalTitle').textContent = `Saldo de ${account.name}`;
+      document.getElementById('balModalSub').textContent = account.balance
+        ? `En ${account.currency}. Reemplaza al último saldo cargado (${fmt(account.balance.amount, account.currency)}).`
+        : `En ${account.currency}. Es el primer saldo de esta cuenta.`;
+      document.getElementById('balAmount').value = account.balance?.amount ?? '';
+      document.getElementById('balDate').value = Fin.todayAr();
+      document.getElementById('balError').textContent = '';
+      openModal('balModal');
+      document.getElementById('balAmount').focus();
+    });
+
+    document.getElementById('balForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      try {
+        const date = document.getElementById('balDate').value;
+        const { results } = await api('/balances', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ account_id: state.balanceAccount.id, amount: Number(document.getElementById('balAmount').value), as_of: date === Fin.todayAr() ? undefined : date })
+        });
+        if (results[0].status === 'error') throw new Error(results[0].errors.join('; '));
+        closeModals();
+        loadResumen().catch(showError);
+      } catch (error) {
+        document.getElementById('balError').textContent = error.message;
+      }
+    });
+
+    document.getElementById('catList').addEventListener('click', e => {
+      const button = e.target.closest('[data-category]');
+      if (!button) return;
+      const range = periodRange();
+      openMovimientos({ category: button.dataset.category, kind: 'expense', from: range.from || '', to: range.to });
+    });
+
+    document.getElementById('flowTableToggle').addEventListener('click', e => {
+      state.flowTable = !state.flowTable;
+      e.currentTarget.setAttribute('aria-pressed', String(state.flowTable));
+      e.currentTarget.textContent = state.flowTable ? 'Ver gráfico' : 'Ver tabla';
+      document.getElementById('flowTable').hidden = !state.flowTable;
+      document.getElementById('flowChartWrap').hidden = state.flowTable;
+    });
+
+    // ---------- Controls ----------
+
+    function syncSegments() {
+      document.querySelectorAll('.js-currency button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.currency === state.currency)));
+      document.querySelectorAll('#periodSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.period === state.period)));
+      const pref = Fin.theme.read();
+      document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themePref === pref)));
+    }
+
+    document.querySelectorAll('.js-currency').forEach(seg => seg.addEventListener('click', e => {
+      const button = e.target.closest('button');
+      if (!button) return;
+      state.currency = button.dataset.currency;
+      writePref('fin.currency', state.currency);
+      syncSegments();
+      renderResumen();
+      renderTx();
+    }));
+    document.getElementById('periodSeg').addEventListener('click', e => {
+      const button = e.target.closest('button');
+      if (!button) return;
+      state.period = button.dataset.period;
+      writePref('fin.period', state.period);
+      syncSegments();
+      loadResumen().catch(showError);
+    });
+    document.getElementById('themeSeg').addEventListener('click', e => {
+      const button = e.target.closest('button');
+      if (!button) return;
+      Fin.theme.set(button.dataset.themePref);
+      syncSegments();
+    });
+    Fin.theme.onChange(() => { Fin.chartDefaults(); renderResumen(); });
+
+    let searchTimer;
+    ['fFrom', 'fTo', 'fAccount', 'fKind', 'fCategory'].forEach(id => document.getElementById(id).addEventListener('change', () => loadTx().catch(showError)));
+    document.getElementById('fQ').addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => loadTx().catch(showError), 250);
+    });
+    document.getElementById('clearFilters').addEventListener('click', () => openMovimientos({}));
+    document.getElementById('txMore').addEventListener('click', () => loadTx(true).catch(showError));
+
+    let resizeTimer;
+    let lastWidth = window.innerWidth;
+    window.addEventListener('resize', () => {
+      if (Math.abs(window.innerWidth - lastWidth) < 40) return;
+      lastWidth = window.innerWidth;
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(renderResumen, 200);
+    });
+
+    // ---------- Configuración ----------
+
+    function renderIolStatus(st) {
+      const box = document.getElementById('iolStatusBox');
+      const text = document.getElementById('iolStatus');
+      const set = (kind, iconName, message) => {
+        box.className = `status ${kind}`;
+        box.querySelector('svg')?.remove();
+        box.insertAdjacentHTML('afterbegin', Fin.icon(iconName));
+        text.textContent = message;
+      };
+      if (!st.username || !st.has_password) return set('bad', 'alert', 'Sin credenciales: la cartera se calcula con los datos locales.');
+      if (st.status.ok === true) return set('ok', 'check', `Conectado. Última lectura: ${when(st.status.lastSuccessAt)}.`);
+      if (st.status.ok === false) return set('bad', 'alert', `${st.status.error}.${st.status.lastSuccessAt ? ` Última lectura buena: ${when(st.status.lastSuccessAt)}.` : ''}`);
+      set('', 'clock', 'Credenciales cargadas, todavía sin probar. Tocá “Probar conexión actual”.');
+    }
+
+    async function settingsCall(path, body) {
+      const res = await fetch(`api/settings/iol${path}`, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined);
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok, data };
+    }
+
+    // ---------- Planilla de la obra ----------
+
+    function renderObra(st) {
+      const box = document.getElementById('obraStatusBox');
+      const text = document.getElementById('obraStatus');
+      const facts = document.getElementById('obraFacts');
+      const set = (kind, iconName, message) => {
+        box.className = `status ${kind}`;
+        box.querySelector('svg')?.remove();
+        box.insertAdjacentHTML('afterbegin', Fin.icon(iconName));
+        text.textContent = message;
+      };
+      document.getElementById('obraSync').disabled = !st.configured || st.running;
+      if (!st.configured) { facts.hidden = true; return set('', 'clock', 'No está configurada. Faltan OBRA_SHEET_ID y GOOGLE_SERVICE_ACCOUNT_FILE en el .env del servidor.'); }
+      const last = st.last?.ok ? st.last : st.last?.previous;
+      if (st.running && !st.last) set('', 'sync', 'Sincronizando…');
+      else if (st.last && !st.last.ok) set('bad', 'alert', `No se pudo leer la planilla: ${st.last.error}.`);
+      else if (st.last) set('ok', 'check', `Sincronizada ${when(st.last.at)}.`);
+      else set('', 'clock', 'Todavía no se sincronizó.');
+      if (!last) { facts.hidden = true; return; }
+      const totals = [last.totals?.ARS ? money(last.totals.ARS, 'ARS') : null, last.totals?.USD ? money(last.totals.USD, 'USD') : null].filter(Boolean).join(' y ');
+      facts.innerHTML = `
+        <div><dt>Gastos en la planilla</dt><dd>${Fin.number(last.rows)}</dd></div>
+        <div><dt>Total</dt><dd>${esc(totals)}</dd></div>
+        <div><dt>Período</dt><dd>${esc(Fin.shortDate(last.from, { year: true }))} al ${esc(Fin.shortDate(last.to, { year: true }))}</dd></div>
+        <div><dt>Última pasada</dt><dd>${last.created} nuevos, ${last.updated} cambiados, ${last.deleted} borrados</dd></div>`;
+      facts.hidden = false;
+    }
+
+    async function loadObra() {
+      const res = await fetch('api/settings/obra');
+      renderObra(await res.json());
+    }
+
+    document.getElementById('obraSync').addEventListener('click', async () => {
+      const btn = document.getElementById('obraSync');
+      btn.disabled = true; btn.textContent = 'Sincronizando…';
+      document.getElementById('obraError').textContent = '';
+      try {
+        const res = await fetch('api/settings/obra/sync', { method: 'POST' });
+        const data = await res.json();
+        if (data.error) document.getElementById('obraError').textContent = data.error;
+        else { renderObra(data); loadResumen().catch(showError); loadFilterOptions().catch(showError); }
+      } catch (err) {
+        document.getElementById('obraError').textContent = err.message;
+      } finally {
+        btn.textContent = 'Sincronizar ahora';
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('obraSee').addEventListener('click', e => {
+      e.preventDefault();
+      const obra = state.accounts.find(a => a.auto_source === 'obra-sheet' && a.currency === 'ARS');
+      openMovimientos({ account_id: obra?.id || '' });
+    });
+
+    async function loadIolSettings() {
+      const { data } = await settingsCall('');
+      if (!document.getElementById('iolUser').value) document.getElementById('iolUser').value = data.username || '';
+      renderIolStatus(data);
+    }
+
+    function setIolMessages(error = '', ok = '') {
+      document.getElementById('iolError').textContent = error;
+      document.getElementById('iolOk').textContent = ok;
+    }
+
+    document.getElementById('iolForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('iolSave');
+      btn.disabled = true; btn.textContent = 'Probando con IOL…'; setIolMessages();
+      try {
+        const password = document.getElementById('iolPass').value;
+        const { ok, data } = await settingsCall('', { username: document.getElementById('iolUser').value.trim(), ...(password ? { password } : {}) });
+        if (!ok) { setIolMessages(data.error || 'No se pudo guardar'); return; }
+        document.getElementById('iolPass').value = '';
+        renderIolStatus(data);
+        setIolMessages('', 'Guardado. IOL aceptó las credenciales y el saldo se actualizó.');
+        loadResumen().catch(showError);
+      } catch (err) {
+        setIolMessages(err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Guardar';
+      }
+    });
+
+    document.getElementById('iolTest').addEventListener('click', async () => {
+      const btn = document.getElementById('iolTest');
+      btn.disabled = true; setIolMessages();
+      try {
+        const { ok, data } = await settingsCall('/test', {});
+        renderIolStatus(data.username !== undefined ? data : { username: '', has_password: false, status: {} });
+        ok ? setIolMessages('', 'IOL aceptó las credenciales guardadas.') : setIolMessages(data.error);
+      } catch (err) {
+        setIolMessages(err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // ---------- Routing ----------
+
+    function route() {
+      const view = { '#movimientos': 'movimientos', '#config': 'config' }[location.hash] || 'resumen';
+      document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
+      Fin.markNav(view);
+      document.title = { resumen: 'Finanzas', movimientos: 'Movimientos · Finanzas', config: 'Configuración · Finanzas' }[view];
+      if (view === 'movimientos') loadTx().catch(showError);
+      if (view === 'config') { loadIolSettings().catch(showError); loadObra().catch(showError); }
+      if (view === 'resumen' && state.flow) requestAnimationFrame(renderResumen);
+      window.scrollTo(0, 0);
+    }
+    window.addEventListener('hashchange', route);
+
+    Fin.hydrate();
+    Fin.chartDefaults();
+    Fin.rosette(document.getElementById('rosette'));
+    syncSegments();
+    route();
+    loadResumen().catch(showError);
+    loadFilterOptions().catch(showError);
+  </script>
+</body>
+</html>
