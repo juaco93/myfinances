@@ -131,3 +131,14 @@ test('cashflow breaks sheet expenses down by stage and type, and movements filte
   assert.equal(finance.listTransactions({ subcategory: 'Cerramiento casa / Materiales' }).total, 2);
   assert.equal(finance.listTransactions({ subcategory: 'Cerr%' }).total, 0, 'LIKE wildcards are escaped');
 });
+
+test('override rules never touch the sheet rows', () => {
+  const finance = setup();
+  finance.reconcileSource({ source: 'obra-sheet', rows: parseRows(sheet, { accounts: ACCOUNTS, category: 'Obra' }) });
+  finance.addRule({ priority: 1, pattern: 'juan perez|.', category: 'Pago de obra', kind: 'transfer', override: true }, 'test');
+  finance.recategorize('test');
+  finance.reconcileSource({ source: 'obra-sheet', rows: parseRows(sheet, { accounts: ACCOUNTS, category: 'Obra' }) });
+  const rows = finance.listTransactions({ accountId: 'obra-ars' }).transactions;
+  assert.ok(rows.length > 0);
+  assert.ok(rows.every(t => t.category === 'Obra' && t.kind === 'expense'));
+});

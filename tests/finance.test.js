@@ -155,3 +155,39 @@ test('seedDefaults adds local extra rules only to an empty rule table', () => {
   finance.seedDefaults({ extraRules: [{ priority: 6, category: 'Other', kind: 'expense', pattern: 'x' }] });
   assert.equal(finance.listRules().length, count);
 });
+
+test('rules can require an account, an amount range and days of the month', () => {
+  const finance = createFinance(openDb(':memory:'));
+  finance.seedDefaults();
+  finance.addRule({ priority: 1, pattern: 'own name', direction: 'in', account_id: 'mercadopago-ars', min_amount: 1000, max_amount: 5000, day_from: 1, day_to: 5, category: 'Sueldo', kind: 'income' }, 'test');
+  const send = (date, amount, account = 'mercadopago-ars') => finance.ingestTransactions([{ account_id: account, date, amount, counterparty: 'Own Name', description: 'Ingreso' }], 'bot', { source: 'bot' }).results[0];
+  assert.equal(send('2026-11-02', 3000).category, 'Sueldo');
+  assert.notEqual(send('2026-11-12', 3000).category, 'Sueldo', 'day 12 is outside 1-5');
+  assert.notEqual(send('2026-11-03', 9000).category, 'Sueldo', 'above max_amount');
+  assert.notEqual(send('2026-11-03', 3100, 'personal-pay-ars').category, 'Sueldo', 'other account');
+  assert.throws(() => finance.addRule({ pattern: 'x', category: 'Y', day_from: 40 }, 'test'), /day_from/);
+});
+
+test('override rules beat the sender, but never manual edits or the expense sheet', () => {
+  const finance = createFinance(openDb(':memory:'));
+  finance.seedDefaults();
+  const r = finance.ingestTransactions([
+    { account_id: 'mercadopago-ars', date: '2026-10-13', amount: 2700000, kind: 'income', category: 'Ingresos', counterparty: 'Some Buyer', external_id: 'a' },
+    { account_id: 'mercadopago-ars', date: '2026-10-14', amount: 50000, kind: 'income', category: 'Ingresos', counterparty: 'Friend', external_id: 'b' }
+  ], 'bot', { source: 'bot' });
+  assert.equal(r.results[0].category, 'Ingresos');
+  finance.addRule({ priority: 47, pattern: '.', direction: 'in', account_id: 'mercadopago-ars', min_amount: 150000, category: 'Cambio de dólares', kind: 'transfer', override: true }, 'test');
+  const moved = finance.recategorize('test');
+  assert.equal(moved.changed, 1);
+  const rows = finance.listTransactions({ accountId: 'mercadopago-ars' }).transactions;
+  assert.equal(rows.find(t => t.external_id === 'a').kind, 'transfer');
+  assert.equal(rows.find(t => t.external_id === 'b').category, 'Ingresos', 'below min_amount keeps the sender category');
+  // A new movement is classified on arrival, even with an explicit kind.
+  const fresh = finance.ingestTransactions([{ account_id: 'mercadopago-ars', date: '2026-10-20', amount: 1100000, kind: 'income', counterparty: 'Other Buyer', external_id: 'c' }], 'bot', { source: 'bot' });
+  assert.equal(fresh.results[0].kind, 'transfer');
+  // Manual edits survive a re-run.
+  const id = rows.find(t => t.external_id === 'a').id;
+  finance.updateTransaction(id, { category: 'Venta auto', kind: 'income' }, 'ui');
+  finance.recategorize('test');
+  assert.equal(finance.getTransaction(id).transaction?.category ?? finance.getTransaction(id).category, 'Venta auto');
+});
