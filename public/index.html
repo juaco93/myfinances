@@ -888,7 +888,7 @@
           return `${header}<tr class="tx-row${dim ? ' tx-dim' : ''}">
             <td><div class="tx-desc">${esc(t.description || t.counterparty)}</div>${t.counterparty && t.description ? `<div class="tx-cp">${esc(t.counterparty)}</div>` : ''}
               <div class="tx-kind show-sm">${chip}</div></td>
-            <td class="hide-sm">${chip}<div class="tx-kind">${t.category === 'Pago de obra' ? 'Contado en la planilla de la obra' : `${KIND_LABEL[t.kind]}${t.category_source === 'manual' ? ', editado' : ''}`}</div></td>
+            <td class="hide-sm">${chip}<div class="tx-kind">${t.source === 'estimate' ? 'Estimado: la cuenta no tenía datos de ese mes' : t.category === 'Pago de obra' ? 'Contado en la planilla de la obra' : `${KIND_LABEL[t.kind]}${t.category_source === 'manual' ? ', editado' : ''}`}</div></td>
             <td class="hide-sm tx-acct">${esc(t.account_name)}</td>
             <td class="num ${t.amount > 0 && !dim ? 'amount-pos' : 'amount-neg'}">${fmt(t.amount, t.currency, { sign: true })}</td>
             <td class="num hide-sm muted">${sameCurrency ? '' : fmt(conv, state.currency, { sign: true })}</td>

@@ -996,6 +996,7 @@ cron.schedule('0 21 * * 1-5', async () => {
 async function maintenance() {
   await obraSync.sync('system');
   try { finance.linkRoundTrips(); } catch (error) { console.error('Round trips:', error.message); }
+  try { finance.pruneEstimates(); } catch (error) { console.error('Estimates:', error.message); }
 }
 cron.schedule('*/30 * * * *', () => { maintenance(); }, { timezone: 'America/Argentina/Buenos_Aires' });
 

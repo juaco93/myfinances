@@ -213,3 +213,16 @@ test('linkRoundTrips cancels a payment that came back', () => {
   finance.recategorize('test');
   assert.equal(finance.listTransactions({}).transactions.find(t => t.external_id === 'out').category, 'Devoluciones', 'rules leave linked legs alone');
 });
+
+test('an estimate goes away when the real movement arrives', () => {
+  const finance = createFinance(openDb(':memory:'));
+  finance.seedDefaults();
+  finance.addRule({ priority: 6, pattern: 'acme', direction: 'in', kind: 'income', category: 'Sueldo', override: true }, 'test');
+  const est = month => ({ account_id: 'wallbit', date: `2026-${month}-12`, amount: 3861, description: 'Sueldo, estimado', counterparty: 'Acme', external_id: `estimate:salary:2026-${month}` });
+  finance.ingestTransactions([est('08'), est('09')], 'ui', { source: 'estimate' });
+  assert.deepEqual(finance.pruneEstimates(), { removed: 0 });
+  finance.ingestTransactions([{ account_id: 'wallbit', date: '2026-09-09', amount: 3861, description: 'Sueldo', counterparty: 'ACME HOLDING', external_id: 'wallbit:real' }], 'bot', { source: 'bot' });
+  assert.deepEqual(finance.pruneEstimates(), { removed: 1 });
+  const left = finance.listTransactions({ accountId: 'wallbit' }).transactions.map(t => t.external_id).sort();
+  assert.deepEqual(left, ['estimate:salary:2026-08', 'wallbit:real']);
+});
