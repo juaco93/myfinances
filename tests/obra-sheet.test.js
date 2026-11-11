@@ -109,3 +109,10 @@ test('linkPayments counts a matching transfer once and releases it when the row 
   assert.equal(released.kind, 'expense');
   assert.equal(released.category, 'Transferencias a personas');
 });
+
+test('nobody but the sheet sync can write to the sheet accounts', () => {
+  const finance = setup();
+  const result = finance.ingestTransactions([{ account_id: 'obra-ars', date: '2026-11-11', amount: -1000, description: 'Cemento' }], 'bot', { source: 'bot' });
+  assert.equal(result.counts.error, 1);
+  assert.match(result.results[0].errors[0], /planilla de la obra/);
+});
