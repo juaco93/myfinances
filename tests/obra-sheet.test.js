@@ -116,3 +116,18 @@ test('nobody but the sheet sync can write to the sheet accounts', () => {
   assert.equal(result.counts.error, 1);
   assert.match(result.results[0].errors[0], /planilla de la obra/);
 });
+
+test('cashflow breaks sheet expenses down by stage and type, and movements filter by either', () => {
+  const finance = setup();
+  finance.reconcileSource({ source: 'obra-sheet', rows: parseRows(sheet, { accounts: ACCOUNTS, category: 'Obra' }) });
+  const flow = finance.cashflow({ from: '2026-11-01', to: '2026-11-30' });
+  const obra = flow.breakdown.filter(b => b.category === 'Obra');
+  const cerramiento = obra.filter(b => b.group === 'Cerramiento casa');
+  assert.deepEqual(cerramiento.map(b => b.type), ['Materiales']);
+  assert.equal(cerramiento[0].ars, 450000 + 570000);
+  assert.equal(obra.find(b => b.group === 'Obrador').ars, 40000);
+  assert.equal(finance.listTransactions({ subcategory: 'Cerramiento casa' }).total, 2);
+  assert.equal(finance.listTransactions({ subcategory: 'Materiales' }).total, 4);
+  assert.equal(finance.listTransactions({ subcategory: 'Cerramiento casa / Materiales' }).total, 2);
+  assert.equal(finance.listTransactions({ subcategory: 'Cerr%' }).total, 0, 'LIKE wildcards are escaped');
+});

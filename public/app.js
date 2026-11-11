@@ -35,7 +35,7 @@
   function token(name) { return getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim(); }
   function tokens() {
     const t = {};
-    for (const k of ['paper', 'sheet', 'sheet-2', 'ink', 'ink-2', 'ink-3', 'rule', 'rule-strong', 'blue', 'blue-wash', 'aqua', 'orange', 'good', 'bad']) t[k] = token(k);
+    for (const k of ['paper', 'sheet', 'sheet-2', 'ink', 'ink-2', 'ink-3', 'rule', 'rule-strong', 'blue', 'blue-wash', 'aqua', 'orange', 'orange-2', 'yellow', 'magenta', 'good', 'bad']) t[k] = token(k);
     return t;
   }
 
@@ -120,7 +120,8 @@
     alert: '<path d="M12 3.5 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17.2v.3"/>',
     clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
     dot: '<circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/>',
-    sync: '<path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 4v4.5h-4.5"/><path d="M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20v-4.5h4.5"/>'
+    sync: '<path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 4v4.5h-4.5"/><path d="M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20v-4.5h4.5"/>',
+    expand: '<path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/>'
   };
   function icon(name, extra = '') {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${ICON_PATHS[name] || ''}</svg>`;

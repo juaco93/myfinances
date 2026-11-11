@@ -13,10 +13,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@300..700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=3">
+  <link rel="stylesheet" href="app.css?v=4">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-sankey@0.12.1/dist/chartjs-chart-sankey.min.js"></script>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </head>
 <body>
   <header class="topbar">
@@ -104,6 +104,7 @@
               <h2 class="panel-title" id="sankeyTitle">A dónde va la plata</h2>
               <p class="panel-sub" id="sankeyHint"></p>
             </div>
+            <button type="button" class="btn small" id="sankeyExpand" data-icon="expand" aria-haspopup="dialog">Ver en detalle</button>
           </div>
           <div class="chart" id="sankeyWrap"><canvas id="sankeyChart" role="img" aria-label="Flujo de los ingresos del período hacia gastos por categoría y ahorro"></canvas></div>
         </section>
@@ -165,6 +166,7 @@
           <option value="ignored">Ignorados</option>
         </select>
         <select class="select" id="fCategory" aria-label="Categoría"><option value="">Todas las categorías</option></select>
+        <input type="hidden" id="fSub">
       </div>
       <div class="filters-foot">
         <span id="filterSummary"></span>
@@ -258,6 +260,21 @@
       </div>
     </section>
   </main>
+  </div>
+
+  <div class="modal-overlay" id="sankeyModal" role="dialog" aria-modal="true" aria-labelledby="sankeyBigTitle">
+    <div class="modal full">
+      <div class="modal-head">
+        <div>
+          <h2 id="sankeyBigTitle">A dónde va la plata</h2>
+          <p class="sub" id="sankeyBigSub"></p>
+        </div>
+        <button type="button" class="icon-btn" data-close aria-label="Cerrar" data-icon="close"></button>
+      </div>
+      <div class="legend" id="sankeyBigLegend"></div>
+      <p class="sub show-sm" style="margin: -4px 0 10px">Deslizá hacia el costado para ver todo el detalle, o girá el teléfono.</p>
+      <div class="sankey-scroll"><div class="sankey-big" id="sankeyBigWrap"><canvas id="sankeyBig" role="img" aria-label="Detalle de a dónde fue la plata del período, por categoría, etapa y tipo de gasto"></canvas></div></div>
+    </div>
   </div>
 
   <div class="modal-overlay" id="txModal" role="dialog" aria-modal="true" aria-labelledby="txModalTitle">
@@ -428,7 +445,7 @@
       renderHero(range);
       renderKpis(monthList);
       renderNwChart(state.history.filter(p => !range.from || p.date >= range.from));
-      renderSankey(state.flow.categories);
+      renderSankey();
       renderAccounts();
       renderFlow(monthList);
       renderCategories(state.flow.categories.filter(c => c.kind === 'expense'));
@@ -531,76 +548,130 @@
       });
     }
 
-    // Income → "Ingresos" → top expense categories + savings (or a deficit source).
-    function renderSankey(categories) {
+    // ---------- A dónde va la plata (Sankey) ----------
+    // Columns: 0 where the money came from, 1 the total, 2 expense categories and savings,
+    // and in the detailed view 3 each category's subcategories (the construction stages) and
+    // 4 their type (Materiales / Mano de obra).
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const PERIOD_LABEL = { month: 'este mes', 3: 'los últimos 3 meses', 6: 'los últimos 6 meses', 12: 'los últimos 12 meses', all: 'todo el período registrado' };
+
+    function sankeyModel({ detailed = false, narrow = false } = {}) {
       const t = Fin.tokens();
+      const tone = name => Fin.token(name);
       const val = c => state.currency === 'ARS' ? c.ars : c.usd;
-      const incomes = categories.filter(c => c.kind === 'income' && val(c) > 0).sort((a, b) => val(b) - val(a));
-      const expenses = categories.filter(c => c.kind === 'expense' && val(c) > 0).sort((a, b) => val(b) - val(a));
+      const cats = state.flow.categories;
+      const incomes = cats.filter(c => c.kind === 'income' && val(c) > 0).sort((a, b) => val(b) - val(a));
+      const expenses = cats.filter(c => c.kind === 'expense' && val(c) > 0).sort((a, b) => val(b) - val(a));
       const totalIn = incomes.reduce((s, c) => s + val(c), 0);
       const totalOut = expenses.reduce((s, c) => s + val(c), 0);
       const deficit = totalOut - totalIn;
-      const hub = deficit > 0 ? 'Total gastado' : 'Ingresos';
+      const base = Math.max(totalIn, totalOut);
+      const minShare = base * (detailed ? 0.008 : 0.02);
+      const nodes = new Map();
       const flows = [];
-      const colors = { [hub]: t['ink-3'] };
-      const minShare = Math.max(totalIn, totalOut) * 0.02;
-      const wrap = document.getElementById('sankeyWrap');
-      const narrow = wrap.clientWidth < 600;
+      const node = (key, name, color, column, meta = {}) => {
+        if (!nodes.has(key)) nodes.set(key, { key, name, color, column, ...meta });
+        return key;
+      };
+      const flow = (from, to, value) => { if (value > 0) flows.push({ from, to, flow: value }); };
 
-      // The income column adds information with 2+ meaningful sources, or when savings had to
-      // cover a deficit (then it shows how much came from income and how much from savings).
-      const bigIn = incomes.filter(c => val(c) >= minShare);
-      const smallIn = incomes.filter(c => val(c) < minShare);
-      if ((bigIn.length > 1 && !narrow) || deficit > 0) {
-        const nodes = bigIn.map(c => ({ name: c.category, value: val(c) }));
-        const smallSum = smallIn.reduce((s, c) => s + val(c), 0);
-        // Sources too small to see fold into the main one instead of stacking unreadable labels.
-        if (smallSum >= minShare || !nodes.length) nodes.push({ name: smallIn.length === 1 ? smallIn[0].category : `Otros ingresos (${smallIn.length})`, value: smallSum });
-        else if (smallSum > 0) nodes[0].value += smallSum;
-        for (const n of nodes) if (n.value > 0) { flows.push({ from: `${n.name} `, to: hub, flow: n.value }); colors[`${n.name} `] = t.aqua; }
+      const hub = node('hub', deficit > 0 ? 'Total gastado' : 'Ingresos', t['ink-3'], 1);
+
+      // Sources: income categories (tiny ones fold into the main one) and, if needed, savings.
+      if ((detailed || deficit > 0 || incomes.filter(c => val(c) >= minShare).length > 1) && !(narrow && !detailed && deficit <= 0)) {
+        const big = incomes.filter(c => val(c) >= minShare);
+        const small = incomes.filter(c => val(c) < minShare);
+        const list = big.map(c => ({ name: c.category, value: val(c) }));
+        const smallSum = small.reduce((s, c) => s + val(c), 0);
+        if (smallSum >= minShare || !list.length) list.push({ name: small.length === 1 ? small[0].category : `Otros ingresos (${small.length})`, value: smallSum, other: small.length > 1 });
+        else if (smallSum > 0) list[0].value += smallSum;
+        for (const item of list) flow(node(`in:${item.name}`, item.name, t.aqua, 0, { kind: 'income', category: item.other ? null : item.name }), hub, item.value);
       }
-      const deficitKey = 'De tus ahorros';
-      if (deficit > 0) { flows.push({ from: deficitKey, to: hub, flow: deficit }); colors[deficitKey] = t.bad; }
+      if (deficit > 0) flow(node('in:deficit', 'De tus ahorros', t.bad, 0), hub, deficit);
 
-      const top = expenses.slice(0, 8).filter(c => val(c) >= minShare);
+      // Expense categories, then their breakdown.
+      const top = expenses.slice(0, detailed ? 10 : 8).filter(c => val(c) >= minShare);
       const rest = expenses.slice(top.length);
-      for (const c of top) { flows.push({ from: hub, to: c.category, flow: val(c) }); colors[c.category] = t.orange; }
-      if (rest.length) { const k = `Otros gastos (${rest.length})`; flows.push({ from: hub, to: k, flow: rest.reduce((s, c) => s + val(c), 0) }); colors[k] = t.orange; }
-      const saved = totalIn - totalOut;
-      if (saved > 0) { flows.push({ from: hub, to: 'Ahorro', flow: saved }); colors.Ahorro = t.blue; }
-
-      const hint = document.getElementById('sankeyHint');
-      if (!flows.length) {
-        if (state.charts.sankeyChart) { state.charts.sankeyChart.destroy(); delete state.charts.sankeyChart; }
-        wrap.style.height = '';
-        wrap.innerHTML = '<p class="empty">No hay ingresos ni gastos en este período.</p><canvas id="sankeyChart" hidden></canvas>';
-        hint.textContent = '';
-        return;
+      for (const c of top) {
+        const cat = node(`cat:${c.category}`, c.category, t.orange, 2, { kind: 'expense', category: c.category });
+        flow(hub, cat, val(c));
+        if (detailed) breakdown(c, cat);
       }
-      if (!wrap.querySelector('canvas:not([hidden])')) wrap.innerHTML = '<canvas id="sankeyChart" role="img" aria-label="Flujo de los ingresos del período hacia gastos por categoría y ahorro"></canvas>';
-      hint.textContent = saved >= 0
-        ? `De cada $ 100 que entraron, ahorraste $ ${Math.round((saved / totalIn) * 100)}`
-        : `Gastaste ${fmt(-saved)} más de lo que entró`;
-      const rightNodes = flows.filter(f => f.from === hub).length;
-      wrap.style.height = `${Math.min(460, Math.max(240, rightNodes * 44 + 24))}px`;
-      const nodeTotals = {};
-      for (const f of flows) { nodeTotals[f.from] = (nodeTotals[f.from] || 0) + f.flow; if (f.to !== hub) nodeTotals[f.to] = (nodeTotals[f.to] || 0) + f.flow; }
-      nodeTotals[hub] = Math.max(totalIn, totalOut);
-      const labels = Object.fromEntries(Object.keys(nodeTotals).map(k => [k, `${k.trim()}  ${fmt(nodeTotals[k], state.currency, { compact: true })}`]));
-      drawChart('sankeyChart', {
+      if (rest.length) flow(hub, node('cat:__rest', `Otras ${rest.length} categorías`, t.orange, 2), rest.reduce((s, c) => s + val(c), 0));
+      const saved = totalIn - totalOut;
+      if (saved > 0) flow(hub, node('cat:__saved', 'Ahorro', t.blue, 2), saved);
+
+      function breakdown(c, catKey) {
+        const items = state.flow.breakdown.filter(b => b.kind === 'expense' && b.category === c.category && val(b) > 0);
+        const groups = new Map();
+        for (const b of items) {
+          const g = b.group || 'Sin detalle';
+          const entry = groups.get(g) || groups.set(g, { name: g, value: 0, types: new Map(), plain: !b.group }).get(g);
+          entry.value += val(b);
+          if (b.type) entry.types.set(b.type, (entry.types.get(b.type) || 0) + val(b));
+        }
+        const list = [...groups.values()].sort((a, b) => b.value - a.value);
+        if (list.filter(g => !g.plain).length < 2) return;
+        const total = val(c);
+        const shown = list.filter((g, i) => i < 14 && g.value >= total * 0.006);
+        const folded = list.filter(g => !shown.includes(g));
+        for (const g of shown) {
+          const key = node(`grp:${c.category}:${g.name}`, g.name, tone('orange-2'), 3, { kind: 'expense', category: c.category, subcategory: g.plain ? null : g.name });
+          flow(catKey, key, g.value);
+          for (const [type, value] of g.types) flow(key, typeNode(c.category, type), value);
+        }
+        if (folded.length) {
+          const key = node(`grp:${c.category}:__rest`, `Otras ${folded.length}`, tone('orange-2'), 3);
+          flow(catKey, key, folded.reduce((s, g) => s + g.value, 0));
+          const types = new Map();
+          for (const g of folded) for (const [type, value] of g.types) types.set(type, (types.get(type) || 0) + value);
+          for (const [type, value] of types) flow(key, typeNode(c.category, type), value);
+        }
+      }
+      function typeNode(category, type) {
+        const color = /materiales/i.test(type) ? tone('yellow') : /mano de obra/i.test(type) ? tone('magenta') : t['ink-3'];
+        return node(`typ:${category}:${type}`, type, color, 4, { kind: 'expense', category, subcategory: type });
+      }
+
+      // Node totals for labels: what flows through each node.
+      const inSum = new Map(); const outSum = new Map();
+      for (const f of flows) { outSum.set(f.from, (outSum.get(f.from) || 0) + f.flow); inSum.set(f.to, (inSum.get(f.to) || 0) + f.flow); }
+      for (const n of nodes.values()) n.value = Math.max(inSum.get(n.key) || 0, outSum.get(n.key) || 0);
+      return { flows, nodes, hub, totalIn, totalOut, saved, deficit, base };
+    }
+
+    function drawSankey(canvasId, model, { detailed = false, narrow = false } = {}) {
+      const t = Fin.tokens();
+      const { nodes, flows, base } = model;
+      const pick = key => nodes.get(key);
+      const labels = {}; const column = {}; const priority = {};
+      for (const n of nodes.values()) {
+        labels[n.key] = `${n.name}  ${fmt(n.value, state.currency, { compact: true })}`;
+        column[n.key] = n.column;
+        priority[n.key] = -n.value;
+      }
+      drawChart(canvasId, {
         type: 'sankey',
         data: {
           datasets: [{
-            data: flows, labels,
-            colorFrom: c => colors[c.dataset.data[c.dataIndex].from],
-            colorTo: c => colors[c.dataset.data[c.dataIndex].to],
-            colorMode: 'gradient', alpha: 0.4, borderWidth: 0, nodeWidth: 8, nodePadding: 16,
-            color: t.ink, font: { size: narrow ? 11 : 12, family: "'Chivo', system-ui, sans-serif" },
-            priority: Object.fromEntries(Object.keys(nodeTotals).map(k => [k, -nodeTotals[k]])), size: 'max'
+            data: flows, labels, column, priority, size: 'max',
+            colorFrom: c => pick(c.dataset.data[c.dataIndex].from).color,
+            colorTo: c => pick(c.dataset.data[c.dataIndex].to).color,
+            colorMode: 'gradient', alpha: detailed ? 0.45 : 0.4, borderWidth: 0,
+            nodeWidth: detailed ? 10 : 8, nodePadding: detailed ? 20 : 16,
+            color: t.ink, font: { size: narrow ? 11 : detailed ? 13 : 12, family: "'Chivo', system-ui, sans-serif" }
           }]
         },
         options: {
           layout: { padding: { top: 6, right: 2, bottom: 10 } },
+          // The plugin staggers each column by half a second: with five columns the last flows
+          // would appear 2.5 s late. One short sweep instead, none with reduced motion.
+          animations: {
+            progress: {
+              duration: ctx => (ctx.type === 'data' && !reduceMotion ? 380 : 0),
+              delay: ctx => (ctx.type === 'data' && !reduceMotion ? (ctx.raw ? pick(ctx.raw.from).column * 90 : 0) : 0)
+            }
+          },
           plugins: {
             tooltip: {
               displayColors: false,
@@ -608,21 +679,68 @@
                 title: () => '',
                 label: ctx => {
                   const d = ctx.raw;
-                  const base = d.from === hub ? Math.max(totalIn, totalOut) : null;
-                  return `${d.from.trim()} → ${d.to}: ${fmt(d.flow)}${base ? ` (${Math.round((d.flow / base) * 100)} %)` : ''}`;
+                  const from = pick(d.from); const to = pick(d.to);
+                  const parent = from.key === 'hub' ? base : from.value;
+                  return `${from.name} → ${to.name}: ${fmt(d.flow)} (${Math.round((d.flow / (parent || 1)) * 100)} %)`;
                 }
               }
             }
           },
           onClick: (evt, elements) => {
-            const d = elements[0] && state.charts.sankeyChart.data.datasets[0].data[elements[0].index];
-            if (!d || d.from !== hub || d.to === 'Ahorro' || d.to.startsWith('Otros gastos')) return;
+            const d = elements[0] && state.charts[canvasId].data.datasets[0].data[elements[0].index];
+            const target = d && (pick(d.to).category ? pick(d.to) : pick(d.from));
+            if (!target?.category) return;
             const range = periodRange();
-            openMovimientos({ category: d.to, kind: 'expense', from: range.from || '', to: range.to });
+            closeModals();
+            openMovimientos({ category: target.category, subcategory: target.subcategory || '', kind: target.kind, from: range.from || '', to: range.to });
           },
           onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
         }
       });
+    }
+
+    function renderSankey() {
+      const wrap = document.getElementById('sankeyWrap');
+      const hint = document.getElementById('sankeyHint');
+      const narrow = wrap.clientWidth < 600;
+      const model = sankeyModel({ narrow });
+      document.getElementById('sankeyExpand').hidden = !model.flows.length;
+      if (!model.flows.length) {
+        if (state.charts.sankeyChart) { state.charts.sankeyChart.destroy(); delete state.charts.sankeyChart; }
+        wrap.style.height = '';
+        wrap.innerHTML = '<p class="empty">No hay ingresos ni gastos en este período.</p><canvas id="sankeyChart" hidden></canvas>';
+        hint.textContent = '';
+        return;
+      }
+      if (!wrap.querySelector('canvas:not([hidden])')) wrap.innerHTML = '<canvas id="sankeyChart" role="img" aria-label="Flujo de los ingresos del período hacia gastos por categoría y ahorro"></canvas>';
+      hint.textContent = model.saved >= 0
+        ? `De cada $ 100 que entraron, ahorraste $ ${Math.round((model.saved / model.totalIn) * 100)}`
+        : `Gastaste ${fmt(-model.saved)} más de lo que entró`;
+      const rightNodes = [...model.nodes.values()].filter(n => n.column === 2).length;
+      wrap.style.height = `${Math.min(460, Math.max(240, rightNodes * 44 + 24))}px`;
+      drawSankey('sankeyChart', model, { narrow });
+      if (document.getElementById('sankeyModal').classList.contains('active')) renderSankeyBig();
+    }
+
+    function renderSankeyBig() {
+      const model = sankeyModel({ detailed: true });
+      const counts = [0, 1, 2, 3, 4].map(col => [...model.nodes.values()].filter(n => n.column === col).length);
+      const wrap = document.getElementById('sankeyBigWrap');
+      wrap.style.height = `${Math.max(window.innerHeight - 220, Math.max(...counts) * 40 + 40, 420)}px`;
+      const has = col => counts[col] > 0;
+      const legend = [
+        ['Ingresos', 'var(--aqua)', [...model.nodes.keys()].some(k => k.startsWith('in:') && k !== 'in:deficit')],
+        ['De tus ahorros', 'var(--bad)', model.deficit > 0],
+        ['Gastos por categoría', 'var(--orange)', true],
+        ['Detalle de cada categoría', 'var(--orange-2)', has(3)],
+        ['Materiales', 'var(--yellow)', [...model.nodes.values()].some(n => n.column === 4 && /materiales/i.test(n.name))],
+        ['Mano de obra', 'var(--magenta)', [...model.nodes.values()].some(n => n.column === 4 && /mano de obra/i.test(n.name))],
+        ['Ahorro', 'var(--blue)', model.saved > 0]
+      ].filter(([, , on]) => on);
+      document.getElementById('sankeyBigLegend').innerHTML = legend.map(([name, color]) => `<span><i class="key" style="--c:${color}"></i>${esc(name)}</span>`).join('');
+      const currency = state.currency === 'ARS' ? 'en pesos' : 'en dólares MEP';
+      document.getElementById('sankeyBigSub').textContent = `${PERIOD_LABEL[state.period].charAt(0).toUpperCase()}${PERIOD_LABEL[state.period].slice(1)}, ${currency}. Tocá cualquier parte para ver sus movimientos.`;
+      drawSankey('sankeyBig', model, { detailed: true });
     }
 
     // Seeded names carry implementation notes, e.g. "Virtual ARS (portfolio.json)".
@@ -726,7 +844,7 @@
 
     // ---------- Movimientos ----------
 
-    const FILTERS = { from: 'fFrom', to: 'fTo', account_id: 'fAccount', kind: 'fKind', category: 'fCategory', q: 'fQ' };
+    const FILTERS = { from: 'fFrom', to: 'fTo', account_id: 'fAccount', kind: 'fKind', category: 'fCategory', subcategory: 'fSub', q: 'fQ' };
 
     function txFilters() {
       const params = new URLSearchParams();
@@ -752,7 +870,10 @@
       const body = document.getElementById('txBody');
       const active = [...txFilters().keys()].length;
       document.getElementById('clearFilters').hidden = !active;
-      document.getElementById('filterSummary').textContent = active ? `${active} ${active === 1 ? 'filtro activo' : 'filtros activos'}` : '';
+      const sub = document.getElementById('fSub').value;
+      document.getElementById('filterSummary').textContent = active
+        ? `${active} ${active === 1 ? 'filtro activo' : 'filtros activos'}${sub ? `, solo “${sub}”` : ''}`
+        : '';
       if (!state.tx.rows.length) {
         body.innerHTML = `<tr><td colspan="5" class="empty">${active ? 'No hay movimientos con esos filtros.' : 'Todavía no hay movimientos cargados.'}</td></tr>`;
       } else {
@@ -886,6 +1007,12 @@
       if (!button) return;
       const range = periodRange();
       openMovimientos({ category: button.dataset.category, kind: 'expense', from: range.from || '', to: range.to });
+    });
+
+    document.getElementById('sankeyExpand').addEventListener('click', () => {
+      openModal('sankeyModal');
+      requestAnimationFrame(renderSankeyBig);
+      document.querySelector('#sankeyModal [data-close]').focus();
     });
 
     document.getElementById('flowTableToggle').addEventListener('click', e => {
