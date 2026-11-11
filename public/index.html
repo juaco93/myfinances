@@ -13,10 +13,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@300..700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=4">
+  <link rel="stylesheet" href="app.css?v=5">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-sankey@0.12.1/dist/chartjs-chart-sankey.min.js"></script>
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </head>
 <body>
   <header class="topbar">
@@ -104,7 +104,13 @@
               <h2 class="panel-title" id="sankeyTitle">A dónde va la plata</h2>
               <p class="panel-sub" id="sankeyHint"></p>
             </div>
-            <button type="button" class="btn small" id="sankeyExpand" data-icon="expand" aria-haspopup="dialog">Ver en detalle</button>
+            <div class="toolbar">
+              <div class="seg js-obra" role="group" aria-label="Incluir la obra" hidden>
+                <button type="button" data-obra="with">Con obra</button>
+                <button type="button" data-obra="without">Sin obra</button>
+              </div>
+              <button type="button" class="btn small" id="sankeyExpand" data-icon="expand" aria-haspopup="dialog">Ver en detalle</button>
+            </div>
           </div>
           <div class="chart" id="sankeyWrap"><canvas id="sankeyChart" role="img" aria-label="Flujo de los ingresos del período hacia gastos por categoría y ahorro"></canvas></div>
         </section>
@@ -148,12 +154,25 @@
           <h1 class="page-title" id="txTitle">Movimientos</h1>
           <p class="page-sub" id="txCount"></p>
         </div>
+        <div class="seg" id="txViewSeg" role="group" aria-label="Qué mostrar">
+          <button type="button" data-view="all">Todos</button>
+          <button type="button" data-view="review">Por clasificar <span id="reviewCount" class="count"></span></button>
+        </div>
         <div class="seg js-currency" role="group" aria-label="Moneda de la conversión">
           <button type="button" data-currency="ARS">En pesos</button>
           <button type="button" data-currency="USD">En dólares</button>
         </div>
       </div>
-      <div class="filters">
+      <section class="panel" id="reviewPanel" hidden>
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title">Por clasificar</h2>
+            <p class="panel-sub" id="reviewSub">Movimientos en categorías genéricas, agrupados por persona o comercio. Elegí una categoría y la app la usa para todos sus movimientos, los anteriores y los que vengan.</p>
+          </div>
+        </div>
+        <ul class="review" id="reviewList"></ul>
+      </section>
+      <div class="filters" id="txFilters">
         <label class="search"><span class="sr-only">Buscar</span><span data-icon="search"></span><input class="input" type="search" id="fQ" placeholder="Buscar por descripción o contraparte"></label>
         <label><span class="sr-only">Desde</span><input class="input" type="date" id="fFrom" title="Desde"></label>
         <label><span class="sr-only">Hasta</span><input class="input" type="date" id="fTo" title="Hasta"></label>
@@ -168,11 +187,11 @@
         <select class="select" id="fCategory" aria-label="Categoría"><option value="">Todas las categorías</option></select>
         <input type="hidden" id="fSub">
       </div>
-      <div class="filters-foot">
+      <div class="filters-foot" id="txFiltersFoot">
         <span id="filterSummary"></span>
         <button type="button" class="link" id="clearFilters" hidden>Limpiar filtros</button>
       </div>
-      <section class="panel">
+      <section class="panel" id="txPanel">
         <div class="table-wrap">
           <table class="tx-table">
             <thead>
@@ -225,6 +244,14 @@
           </div>
         </section>
 
+        <section class="panel" aria-labelledby="rulesTitle">
+          <div>
+            <h2 id="rulesTitle">Reglas aprendidas</h2>
+            <p class="lede">Las que creaste al clasificar un movimiento o un grupo en “Por clasificar”. Si borrás una, esos movimientos vuelven a la categoría que tenían antes.</p>
+          </div>
+          <div><ul class="ledger" id="learnedRules"><li class="empty">Cargando…</li></ul></div>
+        </section>
+
         <section class="panel" aria-labelledby="themeTitle">
           <div>
             <h2 id="themeTitle">Apariencia</h2>
@@ -269,7 +296,13 @@
           <h2 id="sankeyBigTitle">A dónde va la plata</h2>
           <p class="sub" id="sankeyBigSub"></p>
         </div>
-        <button type="button" class="icon-btn" data-close aria-label="Cerrar" data-icon="close"></button>
+        <div class="toolbar">
+          <div class="seg js-obra" role="group" aria-label="Incluir la obra" hidden>
+            <button type="button" data-obra="with">Con obra</button>
+            <button type="button" data-obra="without">Sin obra</button>
+          </div>
+          <button type="button" class="icon-btn" data-close aria-label="Cerrar" data-icon="close"></button>
+        </div>
       </div>
       <div class="legend" id="sankeyBigLegend"></div>
       <p class="sub show-sm" style="margin: -4px 0 10px">Deslizá hacia el costado para ver todo el detalle, o girá el teléfono.</p>
@@ -298,6 +331,7 @@
           </select>
         </label>
         <label class="field"><span>Nota</span><input class="input" id="txNote"></label>
+        <label class="check" id="txLearnWrap"><input type="checkbox" id="txLearn"><span>Usar esta categoría para todos los movimientos de <strong id="txLearnWho"></strong>, los anteriores y los que vengan</span></label>
         <div class="error" id="txError" role="alert"></div>
         <div class="actions">
           <button type="button" class="btn" data-close>Cancelar</button>
@@ -347,7 +381,10 @@
       tx: { rows: [], total: 0 },
       editing: null,
       balanceAccount: null,
-      flowTable: false
+      flowTable: false,
+      obraCategory: null,
+      sankeyNoObra: readPref('fin.sankeyNoObra', '0') === '1',
+      view: 'all'
     };
 
     function readPref(key, fallback) {
@@ -400,7 +437,8 @@
     function showError(error) {
       console.error(error);
       const box = document.getElementById('notice');
-      box.textContent = `No se pudieron cargar los datos: ${error.message}. Recargá la página para reintentar.`;
+      box.classList.remove('ok');
+      box.textContent = `No se pudo completar: ${error.message}.`;
       box.hidden = false;
     }
 
@@ -417,13 +455,16 @@
       try {
         const range = periodRange();
         const qs = new URLSearchParams({ to: range.to, ...(range.from ? { from: range.from } : {}) });
-        const [accounts, flow, history, audit, fx] = await Promise.all([
+        const [accounts, flow, history, audit, fx, obra] = await Promise.all([
           api('/accounts'),
           api(`/cashflow?${qs}`),
           api('/net-worth/history'),
           api('/audit?limit=200'),
-          api('/fx').catch(() => ({ fx: null }))
+          api('/fx').catch(() => ({ fx: null })),
+          fetch('api/settings/obra').then(r => r.json()).catch(() => ({}))
         ]);
+        state.obraCategory = obra.configured ? obra.category : null;
+        syncSegments();
         state.accounts = accounts.accounts;
         state.flow = flow;
         state.history = history.points;
@@ -559,7 +600,9 @@
       const t = Fin.tokens();
       const tone = name => Fin.token(name);
       const val = c => state.currency === 'ARS' ? c.ars : c.usd;
-      const cats = state.flow.categories;
+      // "Sin la obra" leaves the construction out to show everyday spending at a readable scale.
+      const noObra = state.sankeyNoObra && state.obraCategory;
+      const cats = state.flow.categories.filter(c => !(noObra && c.kind === 'expense' && c.category === state.obraCategory));
       const incomes = cats.filter(c => c.kind === 'income' && val(c) > 0).sort((a, b) => val(b) - val(a));
       const expenses = cats.filter(c => c.kind === 'expense' && val(c) > 0).sort((a, b) => val(b) - val(a));
       const totalIn = incomes.reduce((s, c) => s + val(c), 0);
@@ -590,7 +633,8 @@
       if (deficit > 0) flow(node('in:deficit', 'De tus ahorros', t.bad, 0), hub, deficit);
 
       // Expense categories, then their breakdown.
-      const top = expenses.slice(0, detailed ? 10 : 8).filter(c => val(c) >= minShare);
+      // The detailed view lists every category (up to 20); the panel keeps the readable ones.
+      const top = detailed ? expenses.slice(0, 20) : expenses.slice(0, 8).filter(c => val(c) >= minShare);
       const rest = expenses.slice(top.length);
       for (const c of top) {
         const cat = node(`cat:${c.category}`, c.category, t.orange, 2, { kind: 'expense', category: c.category });
@@ -599,7 +643,7 @@
       }
       if (rest.length) flow(hub, node('cat:__rest', `Otras ${rest.length} categorías`, t.orange, 2), rest.reduce((s, c) => s + val(c), 0));
       const saved = totalIn - totalOut;
-      if (saved > 0) flow(hub, node('cat:__saved', 'Ahorro', t.blue, 2), saved);
+      if (saved > 0) flow(hub, node('cat:__saved', noObra ? 'Para la obra y el ahorro' : 'Ahorro', t.blue, 2), saved);
 
       function breakdown(c, catKey) {
         const items = state.flow.breakdown.filter(b => b.kind === 'expense' && b.category === c.category && val(b) > 0);
@@ -637,7 +681,19 @@
       const inSum = new Map(); const outSum = new Map();
       for (const f of flows) { outSum.set(f.from, (outSum.get(f.from) || 0) + f.flow); inSum.set(f.to, (inSum.get(f.to) || 0) + f.flow); }
       for (const n of nodes.values()) n.value = Math.max(inSum.get(n.key) || 0, outSum.get(n.key) || 0);
-      return { flows, nodes, hub, totalIn, totalOut, saved, deficit, base };
+
+      // Vertical order. Each column is stacked from the top, so the categories that open into
+      // detail go first and their subcategories line up next to them; the rest (and savings)
+      // follow below. Without detail this is simply biggest first.
+      const parentOf = new Map(flows.filter(f => nodes.get(f.to).column === 3).map(f => [f.to, f.from]));
+      const opens = new Set(parentOf.values());
+      const order = new Map();
+      const byColumn = col => [...nodes.values()].filter(n => n.column === col);
+      for (const col of [0, 1, 2, 4]) {
+        byColumn(col).sort((a, b) => (col === 2 ? (opens.has(b.key) - opens.has(a.key)) : 0) || b.value - a.value).forEach((n, i) => order.set(n.key, i));
+      }
+      byColumn(3).sort((a, b) => (order.get(parentOf.get(a.key)) - order.get(parentOf.get(b.key))) || b.value - a.value).forEach((n, i) => order.set(n.key, i));
+      return { flows, nodes, hub, totalIn, totalOut, saved, deficit, base, noObra, order };
     }
 
     function drawSankey(canvasId, model, { detailed = false, narrow = false } = {}) {
@@ -648,7 +704,7 @@
       for (const n of nodes.values()) {
         labels[n.key] = `${n.name}  ${fmt(n.value, state.currency, { compact: true })}`;
         column[n.key] = n.column;
-        priority[n.key] = -n.value;
+        priority[n.key] = model.order.get(n.key) ?? 0;
       }
       drawChart(canvasId, {
         type: 'sankey',
@@ -713,9 +769,13 @@
         return;
       }
       if (!wrap.querySelector('canvas:not([hidden])')) wrap.innerHTML = '<canvas id="sankeyChart" role="img" aria-label="Flujo de los ingresos del período hacia gastos por categoría y ahorro"></canvas>';
-      hint.textContent = model.saved >= 0
-        ? `De cada $ 100 que entraron, ahorraste $ ${Math.round((model.saved / model.totalIn) * 100)}`
-        : `Gastaste ${fmt(-model.saved)} más de lo que entró`;
+      hint.textContent = model.noObra
+        ? (model.saved >= 0
+          ? `Sin la obra: de cada $ 100 que entraron, $ ${Math.round((model.totalOut / (model.totalIn || 1)) * 100)} se fueron en el día a día`
+          : `Sin la obra: el día a día costó ${fmt(-model.saved)} más de lo que entró`)
+        : (model.saved >= 0
+          ? `De cada $ 100 que entraron, ahorraste $ ${Math.round((model.saved / (model.totalIn || 1)) * 100)}`
+          : `Gastaste ${fmt(-model.saved)} más de lo que entró`);
       const rightNodes = [...model.nodes.values()].filter(n => n.column === 2).length;
       wrap.style.height = `${Math.min(460, Math.max(240, rightNodes * 44 + 24))}px`;
       drawSankey('sankeyChart', model, { narrow });
@@ -922,6 +982,97 @@
       else location.hash = '#movimientos';
     }
 
+    // ---------- Por clasificar ----------
+
+    function notify(message) {
+      const box = document.getElementById('notice');
+      box.textContent = message;
+      box.classList.add('ok');
+      box.hidden = false;
+      clearTimeout(notify.timer);
+      notify.timer = setTimeout(() => { box.hidden = true; box.classList.remove('ok'); }, 9000);
+    }
+
+    async function refreshReviewCount() {
+      try {
+        const q = await api('/review?limit=1');
+        document.getElementById('reviewCount').textContent = q.total_groups ? String(q.total_groups) : '';
+      } catch (e) { /* non critical */ }
+    }
+
+    function setTxView(view) {
+      state.view = view;
+      document.querySelectorAll('#txViewSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === view)));
+      const review = view === 'review';
+      document.getElementById('reviewPanel').hidden = !review;
+      for (const id of ['txFilters', 'txFiltersFoot', 'txPanel']) document.getElementById(id).hidden = review;
+      if (review) loadReview().catch(showError);
+    }
+
+    async function loadReview() {
+      const q = await api('/review?limit=80');
+      const list = document.getElementById('reviewList');
+      document.getElementById('reviewCount').textContent = q.total_groups ? String(q.total_groups) : '';
+      if (!q.groups.length) { list.innerHTML = '<li class="empty">No queda nada por clasificar.</li>'; return; }
+      list.innerHTML = q.groups.map(g => {
+        const verb = g.direction === 'in' ? (g.count === 1 ? 'entrada' : 'entradas') : (g.count === 1 ? 'pago' : 'pagos');
+        const span = g.first === g.last ? `el ${Fin.shortDate(g.first, { year: true })}` : `del ${Fin.shortDate(g.first, { year: true })} al ${Fin.shortDate(g.last, { year: true })}`;
+        const kind = g.direction === 'in' ? 'income' : 'expense';
+        return `<li class="review-row">
+          <div class="review-who">
+            <div class="name">${esc(g.who)}</div>
+            <div class="meta">${g.count} ${verb} ${span}, hoy en “${esc(g.category)}”</div>
+            ${g.descriptions.length ? `<div class="meta">${esc(g.descriptions.join(', ')).slice(0, 140)}</div>` : ''}
+            <button type="button" class="link small-link" data-see="${esc(g.who)}">Ver movimientos</button>
+          </div>
+          <div class="review-amount">${g.direction === 'in' ? '+' : '−'}${fmt(state.currency === 'ARS' ? g.ars : g.usd).replace(/^[−+]/, '')}</div>
+          <form class="review-form" data-sample="${g.sample_id}">
+            <input class="input" list="categoryList" placeholder="Categoría" aria-label="Categoría para ${esc(g.who)}" required>
+            <select class="select" aria-label="Tipo">
+              <option value="expense"${kind === 'expense' ? ' selected' : ''}>Gasto</option>
+              <option value="income"${kind === 'income' ? ' selected' : ''}>Ingreso</option>
+              <option value="transfer">Transferencia propia o cambio</option>
+              <option value="ignored">Ignorar</option>
+            </select>
+            <button type="submit" class="btn small primary">Clasificar</button>
+          </form>
+        </li>`;
+      }).join('');
+    }
+
+    document.getElementById('txViewSeg').addEventListener('click', e => {
+      const button = e.target.closest('button');
+      if (button) setTxView(button.dataset.view);
+    });
+
+    document.getElementById('reviewList').addEventListener('submit', async e => {
+      e.preventDefault();
+      const form = e.target.closest('.review-form');
+      const [input, select, button] = form.querySelectorAll('input, select, button');
+      button.disabled = true;
+      try {
+        const learned = await api('/rules/learn', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ transaction_id: Number(form.dataset.sample), category: input.value.trim(), kind: select.value })
+        });
+        notify(`Listo: ${learned.changed} ${learned.changed === 1 ? 'movimiento' : 'movimientos'} de ${learned.who} ahora ${learned.changed === 1 ? 'es' : 'son'} “${learned.category}”, y los que vengan también.`);
+        loadFilterOptions();
+        await loadReview();
+        loadResumen().catch(showError);
+      } catch (err) {
+        button.disabled = false;
+        showError(err);
+      }
+    });
+
+    document.getElementById('reviewList').addEventListener('click', e => {
+      const see = e.target.closest('[data-see]');
+      if (!see) return;
+      setTxView('all');
+      openMovimientos({ q: see.dataset.see });
+    });
+
     // ---------- Modals ----------
 
     let lastFocus = null;
@@ -948,6 +1099,10 @@
       document.getElementById('txKind').value = tx.kind;
       document.getElementById('txNote').value = tx.note || '';
       document.getElementById('txError').textContent = '';
+      const learnable = tx.source !== 'obra-sheet' && (tx.counterparty || tx.description);
+      document.getElementById('txLearnWrap').hidden = !learnable;
+      document.getElementById('txLearnWho').textContent = tx.counterparty || tx.description || '';
+      document.getElementById('txLearn').checked = Boolean(tx.counterparty);
       openModal('txModal');
       document.getElementById('txCategory').focus();
     });
@@ -961,9 +1116,20 @@
           body: JSON.stringify({ category: document.getElementById('txCategory').value.trim(), kind: document.getElementById('txKind').value, note: document.getElementById('txNote').value })
         });
         Object.assign(state.editing, transaction);
+        const learn = !document.getElementById('txLearnWrap').hidden && document.getElementById('txLearn').checked;
+        let learned = null;
+        if (learn) {
+          learned = await api('/rules/learn', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ transaction_id: state.editing.id, category: transaction.category, kind: transaction.kind })
+          });
+        }
         closeModals();
-        renderTx();
+        if (learned) { notify(`Listo: ${learned.changed + 1} ${learned.changed ? 'movimientos' : 'movimiento'} de ${learned.who} ahora ${learned.changed ? 'son' : 'es'} “${learned.category}”, y los que vengan también.`); loadTx().catch(showError); }
+        else renderTx();
         loadFilterOptions();
+        refreshReviewCount();
       } catch (error) {
         document.getElementById('txError').textContent = error.message;
       }
@@ -1026,6 +1192,10 @@
     // ---------- Controls ----------
 
     function syncSegments() {
+      document.querySelectorAll('.js-obra').forEach(seg => {
+        seg.hidden = !state.obraCategory;
+        seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.obra === 'without') === state.sankeyNoObra)));
+      });
       document.querySelectorAll('.js-currency button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.currency === state.currency)));
       document.querySelectorAll('#periodSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.period === state.period)));
       const pref = Fin.theme.read();
@@ -1041,6 +1211,15 @@
       renderResumen();
       renderTx();
     }));
+    document.querySelectorAll('.js-obra').forEach(seg => seg.addEventListener('click', e => {
+      const button = e.target.closest('button');
+      if (!button) return;
+      state.sankeyNoObra = button.dataset.obra === 'without';
+      writePref('fin.sankeyNoObra', state.sankeyNoObra ? '1' : '0');
+      syncSegments();
+      renderSankey();
+    }));
+
     document.getElementById('periodSeg').addEventListener('click', e => {
       const button = e.target.closest('button');
       if (!button) return;
@@ -1155,6 +1334,35 @@
       openMovimientos({ account_id: obra?.id || '' });
     });
 
+    // ---------- Reglas aprendidas ----------
+
+    async function loadLearnedRules() {
+      const { rules } = await api('/rules');
+      const learned = rules.filter(r => r.origin === 'learned').sort((a, b) => b.id - a.id);
+      const list = document.getElementById('learnedRules');
+      if (!learned.length) { list.innerHTML = '<li class="empty">Todavía no hay. Aparecen cuando clasificás un movimiento marcando “Usar esta categoría para todos”.</li>'; return; }
+      list.innerHTML = learned.map(r => `<li>
+        <div><div class="name">${esc(r.note || r.pattern)}</div><div class="meta">${esc(KIND_LABEL[r.kind] || r.kind)} en “${esc(r.category)}”</div></div>
+        <div><button type="button" class="link" data-delete-rule="${r.id}">Borrar</button></div>
+      </li>`).join('');
+    }
+
+    document.getElementById('learnedRules').addEventListener('click', async e => {
+      const button = e.target.closest('[data-delete-rule]');
+      if (!button) return;
+      button.disabled = true;
+      try {
+        await api(`/rules/${button.dataset.deleteRule}`, { method: 'DELETE' });
+        const { changed } = await api('/rules/reapply', { method: 'POST' });
+        notify(`Regla borrada. ${changed} ${changed === 1 ? 'movimiento volvió' : 'movimientos volvieron'} a su categoría anterior.`);
+        loadLearnedRules();
+        loadResumen().catch(showError);
+      } catch (err) {
+        button.disabled = false;
+        showError(err);
+      }
+    });
+
     async function loadIolSettings() {
       const { data } = await settingsCall('');
       if (!document.getElementById('iolUser').value) document.getElementById('iolUser').value = data.username || '';
@@ -1206,8 +1414,8 @@
       document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
       Fin.markNav(view);
       document.title = { resumen: 'Finanzas', movimientos: 'Movimientos · Finanzas', config: 'Configuración · Finanzas' }[view];
-      if (view === 'movimientos') loadTx().catch(showError);
-      if (view === 'config') { loadIolSettings().catch(showError); loadObra().catch(showError); }
+      if (view === 'movimientos') { loadTx().catch(showError); setTxView(state.view); refreshReviewCount(); }
+      if (view === 'config') { loadIolSettings().catch(showError); loadObra().catch(showError); loadLearnedRules().catch(showError); }
       if (view === 'resumen' && state.flow) requestAnimationFrame(renderResumen);
       window.scrollTo(0, 0);
     }

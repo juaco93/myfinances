@@ -226,3 +226,68 @@ test('an estimate goes away when the real movement arrives', () => {
   const left = finance.listTransactions({ accountId: 'wallbit' }).transactions.map(t => t.external_id).sort();
   assert.deepEqual(left, ['estimate:salary:2026-08', 'wallbit:real']);
 });
+
+test('new default rules reach an existing database once', () => {
+  const db = openDb(':memory:');
+  db.prepare("INSERT INTO category_rules (priority, pattern, category, kind) VALUES (50, 'netflix', 'Suscripciones', 'expense')").run();
+  const finance = createFinance(db);
+  finance.ensureAccount({ id: 'mercadopago-ars', institution: 'mercadopago', name: 'MercadoPago ARS', currency: 'ARS' });
+  finance.ingestTransactions([{ account_id: 'mercadopago-ars', date: '2026-10-01', amount: -9990, description: 'Google *youtubepremium', external_id: 'yt' }], 'bot', { source: 'bot' });
+  assert.equal(finance.listTransactions({}).transactions[0].category, 'Otros gastos');
+  finance.seedDefaults();
+  assert.equal(finance.listTransactions({}).transactions[0].category, 'Suscripciones', 'upgrade adds the rule and re-applies');
+  const count = finance.listRules().length;
+  finance.seedDefaults();
+  assert.equal(finance.listRules().length, count, 'only once');
+});
+
+test('a correction can teach a rule for the same counterparty, past and future', () => {
+  const finance = createFinance(openDb(':memory:'));
+  finance.seedDefaults();
+  const mk = (id, date, amount) => ({ account_id: 'mercadopago-ars', date, amount, description: 'regular_payment', counterparty: 'MP usuario 2052122995', external_id: id });
+  finance.ingestTransactions([mk('a', '2026-09-02', -1010342.75), mk('b', '2026-10-01', -1000339.36), mk('c', '2026-10-05', 10003.39)], 'bot', { source: 'bot' });
+  const first = finance.listTransactions({}).transactions.find(t => t.external_id === 'b');
+  finance.updateTransaction(first.id, { category: 'Préstamos y cuotas', kind: 'expense' }, 'ui');
+  const learned = finance.learnFromTransaction({ transaction_id: first.id, category: 'Préstamos y cuotas', kind: 'expense' }, 'ui');
+  assert.equal(learned.changed, 1, 'the other outgoing payment');
+  const rows = finance.listTransactions({}).transactions;
+  assert.equal(rows.find(t => t.external_id === 'a').category, 'Préstamos y cuotas');
+  assert.notEqual(rows.find(t => t.external_id === 'c').category, 'Préstamos y cuotas', 'money coming in is a different direction');
+  const fresh = finance.ingestTransactions([mk('d', '2026-11-02', -1208409.13)], 'bot', { source: 'bot' });
+  assert.equal(fresh.results[0].category, 'Préstamos y cuotas', 'future movements too');
+  assert.equal(finance.listRules().filter(r => r.origin === 'learned').length, 1);
+  finance.learnFromTransaction({ transaction_id: first.id, category: 'Tarjeta', kind: 'expense' }, 'ui');
+  assert.equal(finance.listRules().filter(r => r.origin === 'learned').length, 1, 'relearning replaces the rule');
+});
+
+test('reviewQueue groups catch-all movements by counterparty, biggest first', () => {
+  const finance = createFinance(openDb(':memory:'));
+  finance.seedDefaults();
+  finance.ingestTransactions([
+    { account_id: 'mercadopago-ars', date: '2026-10-01', amount: -1000000, description: 'regular_payment', counterparty: 'MP usuario 1', external_id: '1' },
+    { account_id: 'mercadopago-ars', date: '2026-11-01', amount: -1200000, description: 'regular_payment', counterparty: 'MP usuario 1', external_id: '2' },
+    { account_id: 'mercadopago-ars', date: '2026-11-03', amount: -50000, description: 'Transferencia enviada', counterparty: 'Someone', external_id: '3' },
+    { account_id: 'mercadopago-ars', date: '2026-11-03', amount: -9990, description: 'Netflix', external_id: '4' }
+  ], 'bot', { source: 'bot' });
+  const q = finance.reviewQueue();
+  assert.equal(q.total_groups, 2);
+  assert.equal(q.groups[0].who, 'MP usuario 1');
+  assert.equal(q.groups[0].count, 2);
+  assert.equal(q.groups[0].last, '2026-11-01');
+  assert.ok(!q.groups.some(g => /netflix/i.test(g.who)), 'already classified');
+});
+
+test('normalizeLabels merges spellings that differ only in accents or case', () => {
+  const finance = createFinance(openDb(':memory:'));
+  finance.seedDefaults();
+  finance.ingestTransactions([
+    { account_id: 'mercadopago-ars', date: '2026-10-01', amount: -100, description: 'Spotify', external_id: 'a' },
+    { account_id: 'mercadopago-ars', date: '2026-10-02', amount: -200, description: 'Some app', category: 'Suscripciones', subcategory: 'Streaming / membresias', external_id: 'b' },
+    { account_id: 'mercadopago-ars', date: '2026-10-03', amount: -300, description: 'Other', category: 'mascotas', external_id: 'c' }
+  ], 'bot', { source: 'bot' });
+  assert.ok(finance.normalizeLabels().changed >= 2);
+  const rows = finance.listTransactions({}).transactions;
+  assert.equal(rows.find(t => t.external_id === 'b').subcategory, 'Streaming / membresías', 'the rule spelling wins');
+  assert.equal(rows.find(t => t.external_id === 'c').category, 'Mascotas');
+  assert.equal(finance.normalizeLabels().changed, 0, 'idempotent');
+});
