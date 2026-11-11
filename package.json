@@ -1,7 +1,7 @@
 {
   "name": "iol-portfolio-dashboard",
   "version": "1.0.0",
-  "description": "Finanzas personales: patrimonio, ingresos/gastos e inversiones IOL",
+  "description": "Finanzas personales: patrimonio, ingresos y gastos, inversiones IOL y planilla de obra",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,5 +11,8 @@
     "dotenv": "^16.6.1",
     "express": "^4.18.2",
     "node-cron": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=22.5"
   }
 }
