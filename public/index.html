@@ -388,7 +388,7 @@
       flowTable: false,
       obraCategory: null,
       sankeyNoObra: readPref('fin.sankeyNoObra', '0') === '1',
-      withAssets: readPref('fin.nwAssets', '1') === '1',
+      withAssets: readPref('fin.nwScope', 'accounts') === 'all',
       assets: [],
       view: 'all'
     };
@@ -1236,7 +1236,7 @@
       const button = e.target.closest('button');
       if (!button) return;
       state.withAssets = button.dataset.assets === 'with';
-      writePref('fin.nwAssets', state.withAssets ? '1' : '0');
+      writePref('fin.nwScope', state.withAssets ? 'all' : 'accounts');
       syncSegments();
       renderResumen();
     });
