@@ -291,3 +291,25 @@ test('normalizeLabels merges spellings that differ only in accents or case', () 
   assert.equal(rows.find(t => t.external_id === 'c').category, 'Mascotas');
   assert.equal(finance.normalizeLabels().changed, 0, 'idempotent');
 });
+
+test('assets count in the net worth at their dollar cost', () => {
+  const finance = createFinance(openDb(':memory:'));
+  finance.seedDefaults();
+  finance.setFxRate('2026-01-01', { mep: 1000 }, 'test');
+  finance.setFxRate('2026-06-01', { mep: 2000 }, 'test');
+  finance.ensureAccount({ id: 'house-ars', institution: 'obra', name: 'Casa', currency: 'ARS', auto_source: 'sheet' });
+  finance.reconcileSource({ source: 'sheet', rows: [
+    { account_id: 'house-ars', external_id: 'a', date: '2026-01-10', amount: -1000000, kind: 'expense', category: 'Casa', description: 'Ladrillos' },
+    { account_id: 'house-ars', external_id: 'b', date: '2026-06-10', amount: -1000000, kind: 'expense', category: 'Casa', description: 'Cemento' }
+  ] });
+  finance.addBalance({ account_id: 'mercadopago-ars', amount: 200000, as_of: '2026-06-15' }, 'test');
+  finance.setAssets([{ id: 'house', label: 'Casa', source: 'sheet' }]);
+  const nw = finance.netWorth('2026-06-15');
+  assert.equal(nw.usd, 100, 'accounts only');
+  assert.equal(nw.assets[0].usd, 1000 + 500, 'each payment at its own day\'s rate');
+  assert.equal(nw.assets[0].ars, 1500 * 2000, 'pesos at today\'s rate');
+  assert.equal(nw.total.usd, 1600);
+  const history = finance.netWorthHistory({ to: '2026-06-15' });
+  assert.equal(history.points.at(-1).assets_usd, 1500);
+  assert.equal(finance.netWorth('2026-03-01').assets[0].usd, 1000, 'only what was spent by then');
+});

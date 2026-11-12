@@ -53,6 +53,10 @@
         <div class="hero-top">
           <h1 class="hero-label" id="heroLabel">Patrimonio <time id="heroDate"></time></h1>
           <div class="toolbar">
+            <div class="seg" id="assetsSeg" role="group" aria-label="Qué incluye el patrimonio" hidden>
+              <button type="button" data-assets="with">Todo</button>
+              <button type="button" data-assets="without">Solo cuentas</button>
+            </div>
             <div class="seg js-currency" role="group" aria-label="Moneda">
               <button type="button" data-currency="ARS">Pesos</button>
               <button type="button" data-currency="USD">Dólares MEP</button>
@@ -384,6 +388,8 @@
       flowTable: false,
       obraCategory: null,
       sankeyNoObra: readPref('fin.sankeyNoObra', '0') === '1',
+      withAssets: readPref('fin.nwAssets', '1') === '1',
+      assets: [],
       view: 'all'
     };
 
@@ -468,6 +474,7 @@
         state.accounts = accounts.accounts;
         state.flow = flow;
         state.history = history.points;
+        state.assets = history.assets || [];
         state.audit = audit.entries;
         state.fx = fx.fx;
         document.getElementById('notice').hidden = true;
@@ -492,27 +499,40 @@
       renderCategories(state.flow.categories.filter(c => c.kind === 'expense'));
     }
 
+    // Net worth of a history point: the accounts, plus what you own (the house, at cost) unless
+    // "Solo cuentas" is on.
+    const nw = (p, key) => p[key] + (state.withAssets && state.assets.length ? (p[`assets_${key}`] || 0) : 0);
+
     function renderHero(range) {
       const last = state.history[state.history.length - 1];
       const key = state.currency === 'ARS' ? 'ars' : 'usd';
       const otherKey = key === 'ars' ? 'usd' : 'ars';
-      Fin.figure(document.getElementById('heroFigure'), last ? last[key] : null, state.currency);
+      document.getElementById('assetsSeg').hidden = !state.assets.length;
+      Fin.figure(document.getElementById('heroFigure'), last ? nw(last, key) : null, state.currency);
       document.getElementById('heroDate').textContent = last ? `al ${Fin.shortDate(last.date)}` : '';
       const twin = document.getElementById('heroTwin');
-      twin.textContent = last ? fmt(last[otherKey], other()) : '';
+      twin.textContent = last ? fmt(nw(last, otherKey), other()) : '';
       if (state.fx?.mep) {
         const rate = document.createElement('span');
         rate.className = 'muted';
         rate.textContent = `con el dólar MEP a ${money(state.fx.mep, 'ARS', { decimals: 2 })}`;
         twin.append(rate);
       }
+      if (last && state.assets.length) {
+        const parts = document.createElement('span');
+        parts.className = 'muted hero-parts';
+        parts.textContent = state.withAssets
+          ? `${fmt(last[key])} en cuentas y ${fmt(last[`assets_${key}`] || 0)} en ${state.assets.map(a => a.label).join(', ')} (lo invertido${key === 'ars' ? ', al dólar de hoy' : ''})`
+          : `sin contar ${state.assets.map(a => a.label).join(', ')}`;
+        twin.append(parts);
+      }
       const delta = document.getElementById('heroDelta');
       delta.textContent = '';
       const inRange = state.history.filter(p => !range.from || p.date >= range.from);
       const start = state.history.filter(p => range.from && p.date < range.from).pop() || inRange[0];
       if (!start || !last || start === last) return;
-      const diff = last[key] - start[key];
-      const rel = start[key] ? (diff / start[key]) * 100 : 0;
+      const diff = nw(last, key) - nw(start, key);
+      const rel = nw(start, key) ? (diff / nw(start, key)) * 100 : 0;
       const d = document.createElement('span');
       d.className = `delta ${diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat'}`;
       d.textContent = `${diff > 0 ? '▲' : diff < 0 ? '▼' : '■'} ${fmt(Math.abs(diff))} (${pct(rel)})`;
@@ -566,7 +586,7 @@
         data: {
           labels: dates,
           datasets: [{
-            label: 'Patrimonio', data: points.map(p => p[key]), borderColor: t.blue, borderWidth: 2, borderJoinStyle: 'round', borderCapStyle: 'round',
+            label: 'Patrimonio', data: points.map(p => nw(p, key)), borderColor: t.blue, borderWidth: 2, borderJoinStyle: 'round', borderCapStyle: 'round',
             backgroundColor: Fin.lineGradient(t['blue-wash']), fill: true, pointRadius: 0, pointHoverRadius: 5,
             pointHoverBackgroundColor: t.blue, pointHoverBorderColor: t.paper, pointHoverBorderWidth: 2, tension: 0.2
           }]
@@ -1197,6 +1217,7 @@
         seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.obra === 'without') === state.sankeyNoObra)));
       });
       document.querySelectorAll('.js-currency button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.currency === state.currency)));
+      document.querySelectorAll('#assetsSeg button').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.assets === 'with') === state.withAssets)));
       document.querySelectorAll('#periodSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.period === state.period)));
       const pref = Fin.theme.read();
       document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themePref === pref)));
@@ -1211,6 +1232,14 @@
       renderResumen();
       renderTx();
     }));
+    document.getElementById('assetsSeg').addEventListener('click', e => {
+      const button = e.target.closest('button');
+      if (!button) return;
+      state.withAssets = button.dataset.assets === 'with';
+      writePref('fin.nwAssets', state.withAssets ? '1' : '0');
+      syncSegments();
+      renderResumen();
+    });
     document.querySelectorAll('.js-obra').forEach(seg => seg.addEventListener('click', e => {
       const button = e.target.closest('button');
       if (!button) return;

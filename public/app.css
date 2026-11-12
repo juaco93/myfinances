@@ -211,6 +211,7 @@ input:focus-visible, select:focus-visible { outline-offset: 0; }
 .hero-figure .dec { font-size: 0.5em; letter-spacing: -0.01em; color: var(--ink-2); }
 .hero-twin { font-size: 20px; font-weight: 400; margin-top: 10px; color: var(--ink); letter-spacing: -0.01em; }
 .hero-twin .muted { font-size: 14px; letter-spacing: 0; margin-left: 6px; }
+.hero-twin .hero-parts { display: block; margin: 4px 0 0; }
 .hero-delta { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin-top: 10px; font-size: 14px; }
 .hero-chart { position: relative; height: 220px; margin-top: 22px; }
 

@@ -46,6 +46,7 @@ La interfaz web y `/api/finance` piden sesión (un solo usuario). `/api/v1` usa 
 
 `lib/obra-sheet.js` lee la planilla con una cuenta de servicio de Google (solo lectura) al arrancar y cada 30 minutos, o desde Configuración con "Sincronizar ahora". Columnas esperadas: Fecha (dd/mm/aaaa), Descripción, Categoría, Subcategoría, Gasto ARS, Gasto USD, Comentarios, ID de operación de MercadoPago. Las filas sin fecha (totales) se ignoran.
 
+- Lo gastado en la obra también es patrimonio: el total de Resumen suma la obra a costo (cada pago al dólar MEP de su día). "Solo cuentas" la deja afuera. `OBRA_ASSET_LABEL` le cambia el nombre.
 - La planilla manda: filas nuevas se agregan, las editadas se actualizan y las borradas se eliminan. Si de golpe vuelve menos de la mitad de las filas guardadas, no se borra nada.
 - Un pago que también aparece en otra cuenta (la transferencia de MercadoPago al proveedor) se vincula a su fila por número de operación, o por moneda, monto y fecha con hasta 3 días de diferencia. Pasa a "Pago de obra" y no se cuenta dos veces.
 

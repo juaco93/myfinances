@@ -50,6 +50,8 @@ function loadLocalRules() {
 finance.seedDefaults({ extraRules: loadLocalRules() });
 // Construction expenses come from a Google Sheet (OBRA_* in .env); disabled when not configured.
 const obraSync = createObraSync({ finance });
+// What was spent on the construction is also something you own: it counts in the net worth at cost.
+if (obraSync.configured) finance.setAssets([{ id: 'obra', label: process.env.OBRA_ASSET_LABEL || obraSync.status().label, source: obraSync.SOURCE }]);
 const docs = createDocs({ baseUrl: FINANZAS_PUBLIC_URL });
 
 function envFlag(name, fallback = false) {
