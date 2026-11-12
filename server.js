@@ -680,6 +680,35 @@ app.post('/api/settings/iol', async (req, res) => {
 
 app.get('/api/settings/obra', (req, res) => res.json(obraSync.status()));
 
+// Live dollar quotes for the Resumen card: MEP, and USDT/USDC as sold on Binance (where the
+// Wallbit dollars turn into pesos). buy = what you get when you sell, sell = what you pay.
+let quotesCache = { at: 0, data: null };
+app.get('/api/quotes', async (req, res) => {
+  if (quotesCache.data && Date.now() - quotesCache.at < 60000) return res.json(quotesCache.data);
+  const getJson = url => fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+  const [dollars, usdt, usdc] = await Promise.all([
+    getJson('https://dolarapi.com/v1/dolares'),
+    getJson('https://criptoya.com/api/usdt/ars/1'),
+    getJson('https://criptoya.com/api/usdc/ars/1')
+  ]);
+  const bolsa = Array.isArray(dollars) ? dollars.find(d => d.casa === 'bolsa') : null;
+  const crypto = (data, exchanges) => {
+    for (const [key, source] of exchanges) {
+      const q = data?.[key];
+      if (q?.bid > 0 && q?.ask > 0) return { buy: q.totalBid || q.bid, sell: q.totalAsk || q.ask, source, time: q.time ? new Date(q.time * 1000).toISOString() : null };
+    }
+    return null;
+  };
+  const quotes = [
+    bolsa ? { id: 'mep', name: 'Dólar MEP', source: 'Bolsa', buy: bolsa.compra, sell: bolsa.venta, time: bolsa.fechaActualizacion } : null,
+    (q => q && { id: 'usdt', name: 'USDT', ...q })(crypto(usdt, [['binancep2p', 'Binance P2P'], ['binance', 'Binance']])),
+    (q => q && { id: 'usdc', name: 'USDC', ...q })(crypto(usdc, [['binancep2p', 'Binance P2P'], ['binance', 'Binance']]))
+  ].filter(Boolean);
+  const data = { at: new Date().toISOString(), quotes };
+  if (quotes.length) quotesCache = { at: Date.now(), data };
+  res.json(data);
+});
+
 app.post('/api/settings/obra/sync', async (req, res) => {
   if (!obraSync.configured) return res.status(400).json({ error: 'La planilla de la obra no está configurada (OBRA_SHEET_ID y GOOGLE_SERVICE_ACCOUNT_FILE en .env)' });
   const status = await obraSync.sync('ui');

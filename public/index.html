@@ -127,7 +127,8 @@
           </div>
           <ul class="bars" id="catList"></ul>
         </section>
-        <section class="panel area-accounts" aria-labelledby="accountsTitle">
+        <div class="area-accounts side-stack">
+        <section class="panel" aria-labelledby="accountsTitle">
           <div class="panel-head">
             <div>
               <h2 class="panel-title" id="accountsTitle">Cuentas</h2>
@@ -136,6 +137,16 @@
           </div>
           <ul class="ledger" id="accounts"></ul>
         </section>
+        <section class="panel" aria-labelledby="quotesTitle">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title" id="quotesTitle">Cotizaciones</h2>
+              <p class="panel-sub" id="quotesSub">Cuántos pesos te dan por cada dólar</p>
+            </div>
+          </div>
+          <ul class="ledger quotes" id="quotes"><li class="dim"><div class="name">Cargando…</div></li></ul>
+        </section>
+        </div>
         <section class="panel refetch area-months" aria-labelledby="flowTitle">
           <div class="panel-head">
             <div>
@@ -481,6 +492,7 @@
         renderResumen();
         renderFx();
         renderBotActivity();
+        loadQuotes();
       } finally {
         main.classList.remove('is-loading');
       }
@@ -914,6 +926,27 @@
       const fx = state.fx;
       document.getElementById('fxNote').innerHTML = fx?.mep ? `MEP <strong>${esc(money(fx.mep, 'ARS', { decimals: 2 }))}</strong>` : '';
     }
+
+    async function loadQuotes() {
+      const list = document.getElementById('quotes');
+      try {
+        const data = await fetch('api/quotes').then(r => r.json());
+        const mep = data.quotes.find(q => q.id === 'mep');
+        const ars = v => money(v, 'ARS', { decimals: 2 });
+        list.innerHTML = data.quotes.map(q => {
+          const gap = mep && q.id !== 'mep' ? (q.buy / mep.buy - 1) * 100 : null;
+          return `<li>
+            <div><div class="name">${esc(q.name)}</div><div class="meta"><span>${esc(q.source)}</span>${gap == null ? '' : `<span>${esc(pct(gap, { decimals: 1 }))} vs. MEP</span>`}</div></div>
+            <div><div class="amount">${esc(ars(q.buy))}</div><div class="conv">comprás a ${esc(ars(q.sell))}</div></div>
+          </li>`;
+        }).join('') || '<li class="dim"><div class="name">No hay cotizaciones disponibles ahora.</div></li>';
+        document.getElementById('quotesSub').textContent = `Lo que te pagan por cada dólar si vendés. Actualizado a las ${new Date(data.at).toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit' })}`;
+      } catch (error) {
+        list.innerHTML = '<li class="dim"><div class="name">No se pudieron traer las cotizaciones.</div></li>';
+      }
+    }
+
+    setInterval(() => { if (document.visibilityState === 'visible' && !document.getElementById('view-resumen').hidden) loadQuotes(); }, 120000);
 
     function renderBotActivity() {
       const bot = state.audit.find(e => e.actor === 'bot');

@@ -273,6 +273,7 @@ input:focus-visible, select:focus-visible { outline-offset: 0; }
 .area-flow { grid-area: flow; }
 .area-cats { grid-area: cats; }
 .area-accounts { grid-area: accounts; }
+.side-stack { display: grid; gap: 20px; align-content: start; }
 .area-months { grid-area: months; }
 .grid.halves { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .chart { position: relative; height: 280px; }
