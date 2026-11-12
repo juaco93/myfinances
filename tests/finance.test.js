@@ -313,3 +313,20 @@ test('assets count in the net worth at their dollar cost', () => {
   assert.equal(history.points.at(-1).assets_usd, 1500);
   assert.equal(finance.netWorth('2026-03-01').assets[0].usd, 1000, 'only what was spent by then');
 });
+
+test('wallbit dollars turn into pesos at the crypto dollar, other dollars at MEP', () => {
+  const finance = createFinance(openDb(':memory:'));
+  finance.seedDefaults();
+  finance.setFxRate('2026-11-01', { mep: 1500 }, 'test');
+  assert.equal(finance.setCriptoRates([{ date: '2026-11-01', cripto: 1600 }, { date: '2026-10-01', cripto: 1 }]), 1, 'only days with a MEP quote');
+  finance.addBalance({ account_id: 'wallbit', amount: 100, as_of: '2026-11-01' }, 'test');
+  finance.addBalance({ account_id: 'mercadopago-usd', amount: 100, as_of: '2026-11-01' }, 'test');
+  const nw = finance.netWorth('2026-11-01');
+  assert.equal(nw.accounts.find(a => a.account_id === 'wallbit').ars, 160000);
+  assert.equal(nw.accounts.find(a => a.account_id === 'mercadopago-usd').ars, 150000);
+  assert.equal(nw.usd, 200);
+  finance.ingestTransactions([{ account_id: 'wallbit', date: '2026-11-01', amount: 10, kind: 'income', category: 'Sueldo', description: 'Sueldo' }], 'bot', { source: 'bot' });
+  assert.equal(finance.cashflow({ from: '2026-11-01', to: '2026-11-01' }).totals.income_ars, 16000);
+  assert.equal(finance.listAccounts().find(a => a.id === 'wallbit').balance.ars, 160000);
+  assert.equal(finance.missingCripto(), 0);
+});

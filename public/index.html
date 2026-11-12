@@ -860,7 +860,7 @@
         const meter = share >= 0.5 ? `<div class="meter"><div class="track"><div class="fill" style="width:${share.toFixed(1)}%"></div></div><span class="pct">${pctShare(share)}</span></div>` : '';
         return `<li>
           <div><div class="name">${esc(name)}</div>${meta}</div>
-          <div><div class="amount">${fmt(b.amount, a.currency)}</div><div class="conv">${conv ? `≈ ${conv}` : ''}</div></div>
+          <div><div class="amount">${fmt(b.amount, a.currency)}</div><div class="conv">${conv ? `≈ ${conv}${a.fx_basis === 'cripto' && state.currency === 'ARS' ? ' al dólar cripto' : ''}` : ''}</div></div>
           ${meter}
         </li>`;
       }).join('');

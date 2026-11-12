@@ -425,6 +425,8 @@ async function fetchDollarOficial() {
         if (d.casa === 'oficial') rates.oficial = d.venta;
         if (d.casa === 'bolsa') rates.mep = d.venta;
         if (d.casa === 'contadoconliqui') rates.ccl = d.venta;
+        // What a USDT sells for (Binance P2P and the like): the price you get for those dollars.
+        if (d.casa === 'cripto') rates.cripto = d.compra;
       }
       if (rates.mep || rates.ccl || rates.oficial) return rates;
     }
@@ -958,6 +960,20 @@ app.post('/api/snapshot', async (req, res) => {
   }
 });
 
+// Past crypto-dollar quotes, once: accounts valued at USDT need them for their history.
+async function backfillCriptoRates() {
+  if (!finance.missingCripto()) return;
+  try {
+    const res = await fetch('https://api.argentinadatos.com/v1/cotizaciones/dolares/cripto', { signal: AbortSignal.timeout(20000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const list = await res.json();
+    const changed = finance.setCriptoRates(list.map(r => ({ date: r.fecha, cripto: r.compra })));
+    if (changed) console.log(`[fx] crypto dollar filled in for ${changed} days`);
+  } catch (error) {
+    console.error('Crypto dollar history:', error.message);
+  }
+}
+
 // Store today's dollar quote so every movement and balance can be shown in ARS and USD MEP.
 async function refreshFxRate() {
   const rates = await fetchDollarOficial() || await fetchDollarRates();
@@ -1004,7 +1020,7 @@ async function maintenance() {
 cron.schedule('*/30 * * * *', () => { maintenance(); }, { timezone: 'America/Argentina/Buenos_Aires' });
 
 cron.schedule('30 11,17 * * *', () => {
-  refreshFxRate().catch(error => console.error('FX refresh error:', error.message));
+  refreshFxRate().catch(error => console.error('FX refresh error:', error.message)).then(backfillCriptoRates);
 }, { timezone: 'America/Argentina/Buenos_Aires' });
 
 async function init() {
@@ -1026,7 +1042,7 @@ if (!process.env.FINANZAS_API_TOKEN) {
 
 app.listen(PORT, HOST, () => {
   console.log(`Finanzas dashboard running on http://${HOST}:${PORT}`);
-  init().catch(err => console.error('Init error:', err.message));
+  init().catch(err => console.error('Init error:', err.message)).then(backfillCriptoRates);
   setTimeout(maintenance, 15000);
   // One login at startup so Configuración shows the real IOL status, not "untested".
   if (hasIolCredentials() && iolStatus.ok == null) {
