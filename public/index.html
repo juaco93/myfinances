@@ -878,14 +878,31 @@
       }).join('');
     }
 
+    // Chart.js centres each capped bar in its own half of the month's slot, so with few months
+    // the income and expense bars drift far apart. Shrink the slot to just fit the pair.
+    const FLOW_BAR = 24;
+    const pairBars = {
+      id: 'pairBars',
+      beforeUpdate(chart) {
+        const n = Math.max(1, chart.data.labels.length);
+        const slot = Math.max(1, (chart.width - 56) / n);
+        const pair = FLOW_BAR * 2 + 4;
+        for (const ds of chart.data.datasets) {
+          ds.categoryPercentage = Math.min(0.8, pair / slot);
+          ds.barPercentage = FLOW_BAR / (pair / 2);
+        }
+      }
+    };
+
     function renderFlow(months) {
       const t = Fin.tokens();
       const bar = (label, key, color) => ({
         label, data: months.map(m => pick(m, key)), backgroundColor: color, hoverBackgroundColor: color,
-        borderRadius: 4, borderSkipped: 'start', borderColor: t.sheet, borderWidth: { left: 1, right: 1 }, maxBarThickness: 24
+        borderRadius: 4, borderSkipped: 'start', borderColor: t.sheet, borderWidth: { left: 1, right: 1 }, maxBarThickness: FLOW_BAR
       });
       drawChart('flowChart', {
         type: 'bar',
+        plugins: [pairBars],
         data: { labels: months.map(m => Fin.monthLabel(m.month)), datasets: [bar('Ingresos', 'income', t.aqua), bar('Gastos', 'expense', t.orange)] },
         options: {
           interaction: { mode: 'index', intersect: false },
