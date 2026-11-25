@@ -210,7 +210,7 @@
         <div class="table-wrap">
           <table class="tx-table">
             <thead>
-              <tr><th>Descripción</th><th class="hide-sm">Categoría</th><th class="hide-sm">Cuenta</th><th class="num">Monto</th><th class="num hide-sm" id="convHead">En pesos</th></tr>
+              <tr><th>Descripción</th><th class="hide-sm">Categoría</th><th class="hide-sm">Cuenta</th><th class="num">Monto</th><th class="num hide-sm" id="convHead">En pesos</th><th class="tx-act"><span class="sr-only">Editar</span></th></tr>
             </thead>
             <tbody id="txBody"></tbody>
           </table>
@@ -335,6 +335,7 @@
         <button type="button" class="icon-btn" data-close aria-label="Cerrar" data-icon="close"></button>
       </div>
       <form class="form" id="txForm">
+        <label class="field"><span>Descripción</span><input class="input" id="txLabel" maxlength="300" autocomplete="off"><small class="field-hint" id="txLabelHint"></small></label>
         <label class="field"><span>Categoría</span><input class="input" id="txCategory" list="categoryList" required></label>
         <datalist id="categoryList"></datalist>
         <label class="field"><span>Tipo</span>
@@ -346,7 +347,7 @@
           </select>
         </label>
         <label class="field"><span>Nota</span><input class="input" id="txNote"></label>
-        <label class="check" id="txLearnWrap"><input type="checkbox" id="txLearn"><span>Usar esta categoría para todos los movimientos de <strong id="txLearnWho"></strong>, los anteriores y los que vengan</span></label>
+        <label class="check" id="txLearnWrap"><input type="checkbox" id="txLearn"><span>Aplicar a todos los movimientos de <strong id="txLearnWho"></strong>, los anteriores y los que vengan: misma categoría y tipo<span id="txLearnLabel">, y esta descripción</span></span></label>
         <div class="error" id="txError" role="alert"></div>
         <div class="actions">
           <button type="button" class="btn" data-close>Cancelar</button>
@@ -1005,23 +1006,26 @@
         ? `${active} ${active === 1 ? 'filtro activo' : 'filtros activos'}${sub ? `, solo “${sub}”` : ''}`
         : '';
       if (!state.tx.rows.length) {
-        body.innerHTML = `<tr><td colspan="5" class="empty">${active ? 'No hay movimientos con esos filtros.' : 'Todavía no hay movimientos cargados.'}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="6" class="empty">${active ? 'No hay movimientos con esos filtros.' : 'Todavía no hay movimientos cargados.'}</td></tr>`;
       } else {
         let lastDay = null;
         body.innerHTML = state.tx.rows.map(t => {
           const conv = state.currency === 'ARS' ? t.amount_ars : t.amount_usd;
           const dim = t.kind === 'transfer' || t.kind === 'ignored';
           const sameCurrency = t.currency === state.currency || (state.currency === 'USD' && t.currency === 'USDT');
-          const header = t.date !== lastDay ? `<tr class="tx-day"><td colspan="5">${esc(Fin.longDay(t.date))}</td></tr>` : '';
+          const header = t.date !== lastDay ? `<tr class="tx-day"><td colspan="6">${esc(Fin.longDay(t.date))}</td></tr>` : '';
           lastDay = t.date;
           const chip = `<button type="button" class="chip" data-edit="${t.id}" title="Cambiar categoría">${esc(t.category || 'Sin categoría')}</button>`;
+          const name = t.label || t.description || t.counterparty;
+          const original = t.label ? `Original: ${t.description || t.counterparty}` : '';
           return `${header}<tr class="tx-row${dim ? ' tx-dim' : ''}">
-            <td><div class="tx-desc">${esc(t.description || t.counterparty)}</div>${t.counterparty && t.description ? `<div class="tx-cp">${esc(t.counterparty)}</div>` : ''}
+            <td><div class="tx-desc"${original ? ` title="${esc(original)}"` : ''}>${esc(name)}</div>${t.counterparty && (t.description || t.label) ? `<div class="tx-cp">${esc(t.counterparty)}</div>` : ''}
               <div class="tx-kind show-sm">${chip}</div></td>
             <td class="hide-sm">${chip}<div class="tx-kind">${t.source === 'estimate' ? 'Estimado: la cuenta no tenía datos de ese mes' : t.category === 'Pago de obra' ? 'Contado en la planilla de la obra' : `${KIND_LABEL[t.kind]}${t.category_source === 'manual' ? ', editado' : ''}`}</div></td>
             <td class="hide-sm tx-acct">${esc(t.account_name)}</td>
             <td class="num ${t.amount > 0 && !dim ? 'amount-pos' : 'amount-neg'}">${fmt(t.amount, t.currency, { sign: true })}</td>
             <td class="num hide-sm muted">${sameCurrency ? '' : fmt(conv, state.currency, { sign: true })}</td>
+            <td class="tx-act"><button type="button" class="icon-btn tx-edit" data-edit="${t.id}" aria-label="Editar ${esc(name)}" title="Editar">${Fin.icon('edit')}</button></td>
           </tr>`;
         }).join('');
       }
@@ -1164,7 +1168,11 @@
       if (!button) return;
       const tx = state.tx.rows.find(t => t.id === Number(button.dataset.edit));
       state.editing = tx;
-      document.getElementById('txModalSub').textContent = `${Fin.shortDate(tx.date, { year: true })}, ${tx.description || tx.counterparty}, ${fmt(tx.amount, tx.currency, { sign: true })}`;
+      document.getElementById('txModalSub').textContent = `${Fin.shortDate(tx.date, { year: true })}, ${tx.account_name}, ${fmt(tx.amount, tx.currency, { sign: true })}`;
+      const original = tx.description || tx.counterparty || '';
+      document.getElementById('txLabel').value = tx.label || original;
+      document.getElementById('txLabel').placeholder = original;
+      document.getElementById('txLabelHint').textContent = original ? `Como llegó: ${original}` : '';
       document.getElementById('txCategory').value = tx.category || '';
       document.getElementById('txKind').value = tx.kind;
       document.getElementById('txNote').value = tx.note || '';
@@ -1173,9 +1181,18 @@
       document.getElementById('txLearnWrap').hidden = !learnable;
       document.getElementById('txLearnWho').textContent = tx.counterparty || tx.description || '';
       document.getElementById('txLearn').checked = Boolean(tx.counterparty);
+      syncLearnLabel();
       openModal('txModal');
-      document.getElementById('txCategory').focus();
+      document.getElementById('txLabel').focus();
     });
+
+    // The learn checkbox only promises the description when there is a name of your own.
+    function syncLearnLabel() {
+      const tx = state.editing;
+      const value = document.getElementById('txLabel').value.trim();
+      document.getElementById('txLearnLabel').hidden = !tx || !value || value === (tx.description || tx.counterparty || '');
+    }
+    document.getElementById('txLabel').addEventListener('input', syncLearnLabel);
 
     document.getElementById('txForm').addEventListener('submit', async e => {
       e.preventDefault();
@@ -1183,7 +1200,7 @@
         const { transaction } = await api(`/transactions/${state.editing.id}`, {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ category: document.getElementById('txCategory').value.trim(), kind: document.getElementById('txKind').value, note: document.getElementById('txNote').value })
+          body: JSON.stringify({ label: document.getElementById('txLabel').value.trim(), category: document.getElementById('txCategory').value.trim(), kind: document.getElementById('txKind').value, note: document.getElementById('txNote').value })
         });
         Object.assign(state.editing, transaction);
         const learn = !document.getElementById('txLearnWrap').hidden && document.getElementById('txLearn').checked;
@@ -1192,11 +1209,15 @@
           learned = await api('/rules/learn', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ transaction_id: state.editing.id, category: transaction.category, kind: transaction.kind })
+            body: JSON.stringify({ transaction_id: state.editing.id, category: transaction.category, kind: transaction.kind, label: transaction.label })
           });
         }
         closeModals();
-        if (learned) { notify(`Listo: ${learned.changed + 1} ${learned.changed ? 'movimientos' : 'movimiento'} de ${learned.who} ahora ${learned.changed ? 'son' : 'es'} “${learned.category}”, y los que vengan también.`); loadTx().catch(showError); }
+        if (learned) {
+          const n = learned.changed + 1;
+          notify(`Listo: ${n} ${n === 1 ? 'movimiento' : 'movimientos'} de ${learned.who} ${n === 1 ? 'quedó' : 'quedaron'} en “${learned.category}”${learned.label ? ` como “${learned.label}”` : ''}, y los que vengan también.`);
+          loadTx().catch(showError);
+        }
         else renderTx();
         loadFilterOptions();
         refreshReviewCount();
@@ -1419,9 +1440,9 @@
       const { rules } = await api('/rules');
       const learned = rules.filter(r => r.origin === 'learned').sort((a, b) => b.id - a.id);
       const list = document.getElementById('learnedRules');
-      if (!learned.length) { list.innerHTML = '<li class="empty">Todavía no hay. Aparecen cuando clasificás un movimiento marcando “Usar esta categoría para todos”.</li>'; return; }
+      if (!learned.length) { list.innerHTML = '<li class="empty">Todavía no hay. Aparecen cuando editás un movimiento marcando “Aplicar a todos los movimientos de…”.</li>'; return; }
       list.innerHTML = learned.map(r => `<li>
-        <div><div class="name">${esc(r.note || r.pattern)}</div><div class="meta">${esc(KIND_LABEL[r.kind] || r.kind)} en “${esc(r.category)}”</div></div>
+        <div><div class="name">${esc(r.note || r.pattern)}</div><div class="meta">${esc(KIND_LABEL[r.kind] || r.kind)} en “${esc(r.category)}”${r.label ? `, como “${esc(r.label)}”` : ''}</div></div>
         <div><button type="button" class="link" data-delete-rule="${r.id}">Borrar</button></div>
       </li>`).join('');
     }

@@ -260,6 +260,37 @@ test('a correction can teach a rule for the same counterparty, past and future',
   assert.equal(finance.listRules().filter(r => r.origin === 'learned').length, 1, 'relearning replaces the rule');
 });
 
+test('a movement can get a name of its own, and a learned rule can give it to the rest', () => {
+  const finance = createFinance(openDb(':memory:'));
+  finance.seedDefaults();
+  const mk = (id, date, amount) => ({ account_id: 'mercadopago-ars', date, amount, description: 'regular_payment', counterparty: 'MP usuario 2052122995', external_id: id });
+  finance.ingestTransactions([mk('a', '2026-09-02', -1010342.75), mk('b', '2026-10-01', -1000339.36)], 'bot', { source: 'bot' });
+  const byId = id => finance.listTransactions({}).transactions.find(t => t.external_id === id);
+
+  finance.updateTransaction(byId('b').id, { label: 'Resumen tarjeta MP' }, 'ui');
+  assert.equal(byId('b').label, 'Resumen tarjeta MP');
+  assert.equal(byId('b').description, 'regular_payment', 'the original stays');
+  finance.ingestTransactions([mk('b', '2026-10-01', -1000339.36)], 'bot', { source: 'bot' });
+  assert.equal(byId('b').label, 'Resumen tarjeta MP', 'a re-send keeps the name');
+  assert.equal(finance.listTransactions({ q: 'resumen tarjeta' }).total, 1, 'search finds the name');
+
+  const learned = finance.learnFromTransaction({ transaction_id: byId('b').id, category: 'Tarjeta de crédito', kind: 'expense', label: 'Resumen tarjeta MP' }, 'ui');
+  assert.equal(learned.label, 'Resumen tarjeta MP');
+  assert.equal(byId('a').label, 'Resumen tarjeta MP', 'past movements get the name');
+  assert.equal(byId('a').category, 'Tarjeta de crédito');
+  const fresh = finance.ingestTransactions([mk('c', '2026-11-02', -1208409.13)], 'bot', { source: 'bot' });
+  assert.equal(fresh.results[0].category, 'Tarjeta de crédito');
+  assert.equal(byId('c').label, 'Resumen tarjeta MP', 'and so do the next ones');
+
+  finance.updateTransaction(byId('a').id, { label: 'regular_payment' }, 'ui');
+  assert.equal(byId('a').label, null, 'typing the original back clears the name');
+  const rule = finance.listRules().find(r => r.origin === 'learned');
+  finance.deleteRule(rule.id, 'ui');
+  finance.recategorize('ui');
+  assert.equal(byId('c').label, null, 'names from a deleted rule go away');
+  assert.equal(byId('b').label, 'Resumen tarjeta MP', 'names typed by hand stay');
+});
+
 test('reviewQueue groups catch-all movements by counterparty, biggest first', () => {
   const finance = createFinance(openDb(':memory:'));
   finance.seedDefaults();

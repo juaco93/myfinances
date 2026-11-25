@@ -3,7 +3,7 @@
 App personal de finanzas: patrimonio en pesos y dólares MEP, ingresos y gastos, inversiones en InvertirOnline (IOL) y gastos de una obra leídos de una planilla de Google. Un agente externo (bot) carga movimientos y saldos por una API con token.
 
 - **Resumen:** patrimonio con su evolución, ingresos, gastos y ahorro del período, a dónde va la plata (Sankey), cuentas y gastos por categoría.
-- **Movimientos:** todos los movimientos agrupados por día, con filtros y edición de categoría.
+- **Movimientos:** todos los movimientos agrupados por día, con filtros. El lápiz de cada fila cambia descripción, categoría, tipo y nota; con "Aplicar a todos los movimientos de…" se guarda una regla y los movimientos anteriores y futuros de esa contraparte quedan igual (la descripción original se conserva para que las reglas sigan funcionando).
 - **Inversiones:** cartera de IOL en vivo, composición, comparación con S&P 500 y Merval en dólares, rendimiento mensual y tenencias.
 - **Configuración:** credenciales de IOL, planilla de la obra, tema claro u oscuro, acceso del bot.
 
